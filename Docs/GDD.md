@@ -54,11 +54,14 @@ votada. **Regra derivada: todo desbloqueio deve mudar uma decisão, não um núm
 
 ## 2. O tabuleiro
 
-- Terreno construível **11×11 tiles**. Prefeitura ocupa o **3×3 central**, imóvel, **600 HP**.
+- Terreno construível **21×21 tiles**. Prefeitura ocupa o **5×5 central**, imóvel, **600 HP**.
 - O anel é dividido em 4 **Quadrantes**. Com 4 jogadores, um cada — ninguém constrói no dos outros.
   Com menos gente, os quadrantes vagos são repartidos (solo leva os quatro).
 - **8 Faixas** de aproximação (N, NE, L, SE, S, SO, O, NO) trazem monstros dos **Arredores**
-  (raio 18 células), onde também ficam as árvores, rochas e baús.
+  (raio 36 células). Os recursos **não** ficam espalhados nesse anel: madeira, pedra e ouro
+  vivem em quatro bolsões nas diagonais (NE, SE, SO, NO), cada um sob a guarda natural de um
+  Quadrante. Colher deixa de ser "andar em volta" e vira decisão de rota — ir ao canto custa
+  tempo e distância da Faixa quente.
 - Prédio: 150 HP. Muralha: 400 HP. Prédio destruído vira **Escombro** — tile bloqueado até ser limpo.
 
 ### A dívida do crescimento
@@ -203,7 +206,7 @@ Ordem inegociável: **nunca abrir o netcode antes de o jogo existir single-playe
 
 ### ✅ Fase 0-2 — Núcleo jogável solo `FEITO`
 
-Grid 11×11 com Prefeitura, herói com auto-ataque na direção do movimento, colheita com carga e
+Grid 21×21 com Prefeitura, herói com auto-ataque na direção do movimento, colheita com carga e
 depósito, 10 prédios, 5 monstros + kaiju, flow direto sem NavMesh, 3 fases por turno, 9 turnos,
 Ruas, Distritos, draft privado, Escombros, Túmulos, Urnas, Bússola de Ameaça, Prognóstico ao vivo,
 HUD com a dívida durante o arrasto, câmera isométrica, gramática de placeholders.
@@ -212,13 +215,18 @@ HUD com a dívida durante o arrasto, câmera isométrica, gramática de placehol
 
 | Perfil | Resultado |
 |---|---|
-| 4p compacto | Ato 1 inteiro com 600/600 · derrota no turno 5 |
-| 4p espalhado | perde HP a partir do turno 2 · derrota no turno 5 |
+| 4p compacto | 600/600 até o turno 4 · derrota no turno 7 |
+| 4p espalhado | derrota no turno 6 |
 | 2p | derrota no turno 4 |
 | Solo | derrota no turno 4 |
-| 400 monstros | 0,03 ms/tick — 0,1% do orçamento de 20 Hz |
+| 400 monstros | 0,05 ms/tick — 0,1% do orçamento de 20 Hz |
 
 Jogar compacto ganha de jogar espalhado. A dívida está funcionando.
+
+> **Escala é balanceamento.** Ao dobrar o mapa (11→21), a dupla despencou do turno 5 para o 2:
+> mesmas cartas e mesmo alcance de torre para cobrir 4× a área. Alcance das torres, mão inicial e
+> curva de XP tiveram de acompanhar. Qualquer mudança futura no tamanho do tabuleiro exige rodar
+> `Destiny Together > Simular partida no console` de novo.
 
 ### ▶ Fase 3 — Playtest e calibragem `PRÓXIMO`
 

@@ -24,41 +24,56 @@ namespace DestinyTogether.EditorTools
     public static class ArtSetup
     {
         private const string ContentFolder = "Assets/_Project/Content/Visuals";
+        private const string ScenePath = "Assets/_Project/Scenes/Arena.unity";
         private const string VisualsPath = ContentFolder + "/Visuals_Cidade.asset";
         private const string AtmospherePath = ContentFolder + "/Atmosfera_Nebuloso.asset";
 
         private const string City = "Assets/Polylised - Medieval Desert City/Prefabs/";
         private const string Forest = "Assets/Fantasy Forest Environment Free Sample/";
 
-        /// <summary>(definição, caminho do prefab, largura em células, por quê)</summary>
-        private static readonly (string def, string path, float cells)[] Buildings =
+        /// <summary>
+        /// (definição, prefab, largura em células, teto de altura em células)
+        ///
+        /// O teto de altura importa tanto quanto a largura: tudo aqui ocupa 1 tile de 1×1, e sem
+        /// limite vertical uma torre de castelo real (dezenas de unidades de alto) vira um poste
+        /// que tapa metade do tabuleiro visto de cima. Torres podem ser altas — são o marco da
+        /// defesa; casas e muralhas ficam baixas para não competir.
+        /// </summary>
+        private static readonly (string def, string path, float cells, float maxHeight)[] Buildings =
         {
             // Torres: três silhuetas diferentes para três funções diferentes.
-            (DefaultContent.Balestra,         City + "prefab_unique_buildings/castle_tower_round.prefab",       1.0f),
-            (DefaultContent.TorreDeGelo,      City + "prefab_unique_buildings/castle_tower_octagon.prefab",     1.0f),
-            (DefaultContent.BalistaDeImpacto, City + "prefab_unique_buildings/castle_tower_rectangular.prefab", 1.0f),
-            (DefaultContent.PostoDeVigia,     City + "prefab_unique_buildings/citadel_tower_a.prefab",          0.85f),
+            (DefaultContent.Balestra,         City + "prefab_unique_buildings/castle_tower_round.prefab",       1.0f, 2.6f),
+            (DefaultContent.TorreDeGelo,      City + "prefab_unique_buildings/castle_tower_octagon.prefab",     1.0f, 2.6f),
+            (DefaultContent.BalistaDeImpacto, City + "prefab_unique_buildings/castle_tower_rectangular.prefab", 1.0f, 2.2f),
+            (DefaultContent.PostoDeVigia,     City + "prefab_unique_buildings/citadel_tower_a.prefab",          0.85f, 3.2f),
 
             // Braseiro é literalmente uma fogueira presa — e ainda emite luz no escuro.
-            (DefaultContent.Braseiro,         City + "prefab_props/fire_cage.prefab",                           0.8f),
+            (DefaultContent.Braseiro,         City + "prefab_props/fire_cage.prefab",                           0.8f, 1.4f),
 
             // Muralha: peça de parede de verdade, baixa e larga.
-            (DefaultContent.Muralha,          City + "prefab_unique_buildings/castle_wall_5m.prefab",           1.0f),
+            (DefaultContent.Muralha,          City + "prefab_unique_buildings/castle_wall_5m.prefab",           1.0f, 1.2f),
 
             // Produção: casas civis. Não atiram, então não podem parecer que atiram.
-            (DefaultContent.Serraria,         City + "prefab_civilian_buildings/civilian_house_03.prefab",      1.0f),
-            (DefaultContent.Pedreira,         City + "prefab_civilian_buildings/civilian_house_11.prefab",      1.0f),
-            (DefaultContent.Oficina,          City + "prefab_civilian_buildings/civilian_house_19.prefab",      1.0f),
+            (DefaultContent.Serraria,         City + "prefab_civilian_buildings/civilian_house_03.prefab",      1.0f, 1.6f),
+            (DefaultContent.Pedreira,         City + "prefab_civilian_buildings/civilian_house_11.prefab",      1.0f, 1.6f),
+            (DefaultContent.Oficina,          City + "prefab_civilian_buildings/civilian_house_19.prefab",      1.0f, 1.6f),
 
             // Depósito: pilha de barris lê como armazenamento à primeira vista.
-            (DefaultContent.Deposito,         City + "prefab_props/barrel_group.prefab",                        1.0f),
+            (DefaultContent.Deposito,         City + "prefab_props/barrel_group.prefab",                        1.0f, 1.0f),
         };
 
+        // Medido no FBX com o eixo correto (Z para cima): 6047 x 3651 de base por 6911 de ALTURA.
+        // A citadela sempre foi a peça mais vertical e monumental do pack — ela só entrava
+        // tombada. Trocá-la por uma igreja tratava o sintoma; corrigir o eixo resolve a causa.
         private const string TownHallPath = City + "prefab_unique_buildings/citadel_main.prefab";
         private const string TreePath     = City + "prefab_trees/dead_tree_a.prefab";
         private const string RockPath     = City + "prefab_terrain/cliff_01.prefab";
         private const string ChestPath    = City + "prefab_props/box.prefab";
-        private const string GroundMat    = Forest + "Materials/dirt01.mat";
+
+        // Grama (não terra) + tint de grama morta: a textura dá a quebra visual que areia lisa
+        // não dava, e o tint faz o verde virar palha seca sem precisar autorar material novo.
+        private const string GroundMat    = Forest + "Materials/grass01.mat";
+        private static readonly Color DeadGrassTint = new Color(0.40f, 0.35f, 0.21f, 1f);
 
         /// <summary>Cenário decorativo. Árvores mortas dominam — o clima é de cidade sitiada.</summary>
         private static readonly string[] ScatterPaths =
@@ -77,7 +92,7 @@ namespace DestinyTogether.EditorTools
         // ------------------------------------------------------------------------------
 
         [MenuItem("Destiny Together/Aplicar arte importada (Polylised + Floresta)", false, 5)]
-        public static void ApplyMenu() => Apply(verbose: true);
+        public static void ApplyMenu() => Apply(verbose: true, allowOpenScene: true);
 
         /// <summary>
         /// Roda uma vez após a compilação: se os packs estão presentes e os assets ainda não
@@ -90,10 +105,21 @@ namespace DestinyTogether.EditorTools
             EditorApplication.delayCall += TrySetupOnce;
         }
 
+        /// <summary>
+        /// Sobe quando o mapeamento muda de forma que exige regenerar o asset.
+        /// v2: tetos de altura por peça, normalização de escala do cenário, tint do chão.
+        /// v3: mapa dobrado, Prefeitura vertical (igreja), chão de grama morta.
+        /// v4: correção de eixo do pack (Z-up) — o pack inteiro entrava deitado.
+        /// </summary>
+        private const int CurrentSetupVersion = 4;
+
         private static void TrySetupOnce()
         {
-            if (AssetDatabase.LoadAssetAtPath<VisualsProfile>(VisualsPath) != null) return;
             if (AssetDatabase.LoadAssetAtPath<GameObject>(TownHallPath) == null) return; // packs ausentes
+
+            var existing = AssetDatabase.LoadAssetAtPath<VisualsProfile>(VisualsPath);
+            if (existing != null && existing.SetupVersion >= CurrentSetupVersion) return;
+
             Apply(verbose: true);
         }
 
@@ -127,7 +153,7 @@ namespace DestinyTogether.EditorTools
             }
         }
 
-        public static void Apply(bool verbose)
+        public static void Apply(bool verbose, bool allowOpenScene = false)
         {
             if (!AssetDatabase.IsValidFolder(ContentFolder))
                 Directory.CreateDirectory(ContentFolder);
@@ -142,32 +168,41 @@ namespace DestinyTogether.EditorTools
             var missing = new List<string>();
             int mapped = 0;
 
+            visuals.SetupVersion = CurrentSetupVersion;
             visuals.DisplayName = "Cidade sitiada";
             visuals.Notes = "Polylised - Medieval Desert City + Fantasy Forest. " +
                             "Gerado por Destiny Together > Aplicar arte importada.";
             visuals.Entries.Clear();
 
-            foreach (var (def, path, cells) in Buildings)
+            foreach (var (def, path, cells, maxHeight) in Buildings)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null) { missing.Add(path); continue; }
-                visuals.Entries.Add(VisualEntry.Create(def, prefab, cells));
+                var entry = VisualEntry.Create(def, prefab, cells, maxHeight);
+                entry.EulerAngles = PolylisedUpright;
+                visuals.Entries.Add(entry);
                 mapped++;
             }
 
-            visuals.TownHall = MakeEntry("Prefeitura", TownHallPath, 3.2f, missing, ref mapped);
-            visuals.Tree     = MakeEntry("Arvore",     TreePath,     1.8f, missing, ref mapped);
-            visuals.Rock     = MakeEntry("Rocha",      RockPath,     1.3f, missing, ref mapped);
-            visuals.Chest    = MakeEntry("Bau",        ChestPath,    0.9f, missing, ref mapped);
+            // 4.5 células de largura dentro dos 5x5 da Prefeitura, com folga para a altura ir a 7:
+            // o centro da vila deve ser a coisa mais alta do tabuleiro.
+            visuals.TownHall = MakeEntry("Prefeitura", TownHallPath, 4.5f, 7f, missing, ref mapped);
+            visuals.Tree     = MakeEntry("Arvore",     TreePath,     1.6f, 3.2f, missing, ref mapped);
+            visuals.Rock     = MakeEntry("Rocha",      RockPath,     1.3f, 1.1f, missing, ref mapped);
+            visuals.Chest    = MakeEntry("Bau",        ChestPath,    0.9f, 0.9f, missing, ref mapped);
 
             visuals.GroundMaterial = AssetDatabase.LoadAssetAtPath<Material>(GroundMat);
             if (visuals.GroundMaterial == null) missing.Add(GroundMat);
+            visuals.GroundTint = DeadGrassTint;
 
             visuals.ScatterProps = ScatterPaths
                 .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
                 .Where(g => g != null)
                 .ToList();
-            if (visuals.ScatterCount == 0) visuals.ScatterCount = 110;
+            // O mapa dobrou de lado, entao a area quadruplicou: 160 mantem a mesma densidade de
+            // antes sem fechar o campo de visao — o jogador precisa VER a horda chegando.
+            visuals.ScatterCount = 160;
+            visuals.ScatterTargetCells = 1.6f;
             visuals.ScatterMinScale = 0.7f;
             visuals.ScatterMaxScale = 1.5f;
 
@@ -177,9 +212,13 @@ namespace DestinyTogether.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            BindToOpenScene(visuals, atmosphere, verbose);
+            BindToScene(visuals, atmosphere, verbose, allowOpenScene);
 
             if (!verbose) return;
+
+            // Relatório de tamanhos junto com o setup: descobrir que uma peça saiu gigante ao dar
+            // Play é caro; descobrir lendo o Console é grátis.
+            Debug.Log(ArtValidator.Validate(visuals));
 
             Debug.Log($"[Destiny Together] Arte aplicada: {mapped} pecas mapeadas, " +
                       $"{visuals.ScatterProps.Count} props de cenario ({visuals.ScatterCount} instancias). " +
@@ -189,13 +228,27 @@ namespace DestinyTogether.EditorTools
                             string.Join("\n  ", missing)));
         }
 
-        private static VisualEntry MakeEntry(string defName, string path, float cells,
+        /// <summary>
+        /// O pack Polylised é modelado em Z-up mas exportado declarando UpAxis=Y, então o Unity
+        /// importa tudo DEITADO. Confirmado medindo peças com simetria de revolução: o barril tem
+        /// X=177,9 e Y=176,0 (o círculo está em XY) com Z=294,7 de comprimento; a fonte tem
+        /// X=Y=462,17 exatos. Ambos só fazem sentido com Z para cima.
+        ///
+        /// Girar -90° em X põe o pack inteiro de pé. Vale para todas as peças dele — torres,
+        /// muralhas, casas, props e árvores.
+        /// </summary>
+        private static readonly Vector3 PolylisedUpright = new Vector3(-90f, 0f, 0f);
+
+        private static VisualEntry MakeEntry(string defName, string path, float cells, float maxHeight,
                                              List<string> missing, ref int mapped)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) { missing.Add(path); return default; }
             mapped++;
-            return VisualEntry.Create(defName, prefab, cells);
+            var entry = VisualEntry.Create(defName, prefab, cells, maxHeight);
+            if (path.StartsWith(City, System.StringComparison.Ordinal))
+                entry.EulerAngles = PolylisedUpright;
+            return entry;
         }
 
         private static T LoadOrCreate<T>(string path) where T : ScriptableObject
@@ -209,13 +262,28 @@ namespace DestinyTogether.EditorTools
         }
 
         /// <summary>
-        /// Preenche os campos do Bootstrap se a cena estiver aberta. Não abre nem salva cena por
-        /// conta própria — mexer no arquivo de cena de alguém sem pedir é a receita para trabalho
-        /// perdido.
+        /// Liga os perfis ao Bootstrap e SALVA a cena.
+        ///
+        /// Salvar é o ponto crítico: sem isso o campo fica preenchido só em memória e o Play
+        /// seguinte roda com o valor do disco — que é vazio. Foi exatamente esse o modo de falha
+        /// que fez a arte "não aparecer" mesmo com tudo importado e mapeado.
+        ///
+        /// Quando a cena não está aberta, só abre se <paramref name="allowOpenScene"/> permitir,
+        /// e ainda assim passando pelo diálogo padrão de salvar o trabalho em andamento.
         /// </summary>
-        private static void BindToOpenScene(VisualsProfile visuals, AtmosphereProfile atmosphere, bool verbose)
+        private static void BindToScene(VisualsProfile visuals, AtmosphereProfile atmosphere,
+                                        bool verbose, bool allowOpenScene)
         {
             var bootstrap = Object.FindFirstObjectByType<Bootstrap>();
+
+            if (bootstrap == null && allowOpenScene)
+            {
+                if (!UnityEditor.SceneManagement.EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                    return;
+                UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath);
+                bootstrap = Object.FindFirstObjectByType<Bootstrap>();
+            }
+
             if (bootstrap == null)
             {
                 if (verbose)
@@ -228,10 +296,14 @@ namespace DestinyTogether.EditorTools
             bootstrap.Visuals = visuals;
             bootstrap.Atmosfera = atmosphere;
             EditorUtility.SetDirty(bootstrap);
-            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(bootstrap.gameObject.scene);
+
+            var scene = bootstrap.gameObject.scene;
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+            if (scene.IsValid() && !string.IsNullOrEmpty(scene.path))
+                UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene);
 
             if (verbose)
-                Debug.Log("[Destiny Together] Perfis ligados ao Bootstrap. Salve a cena (Ctrl+S) e de Play.");
+                Debug.Log("[Destiny Together] Perfis ligados ao Bootstrap e cena salva. Pode dar Play.");
         }
     }
 }

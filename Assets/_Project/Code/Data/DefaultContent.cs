@@ -73,14 +73,14 @@ namespace DestinyTogether.Data
             AddTower(new TowerSpec
             {
                 Id = Def(Balestra), DisplayName = "Balestra", Tag = BuildingTag.Ferro,
-                MaxHealth = 150f, Damage = 16f, Range = 4.5f, ShotInterval = 1.2f, WoodPerShot = 1f,
+                MaxHealth = 150f, Damage = 16f, Range = 6.2f, ShotInterval = 1.2f, WoodPerShot = 1f,
                 Description = "Dano direto de longo alcance. O predio-base da defesa."
             });
 
             AddTower(new TowerSpec
             {
                 Id = Def(Braseiro), DisplayName = "Braseiro", Tag = BuildingTag.Igneo,
-                MaxHealth = 150f, Damage = 10f, Range = 3f, ShotInterval = 1f, SplashRadius = 1.6f, WoodPerShot = 1f,
+                MaxHealth = 150f, Damage = 10f, Range = 4.2f, ShotInterval = 1f, SplashRadius = 1.6f, WoodPerShot = 1f,
                 Targeting = TargetingRule.MaisProximo,
                 Description = "Dano em area curta. Come pacote de Enxame."
             });
@@ -88,7 +88,7 @@ namespace DestinyTogether.Data
             AddTower(new TowerSpec
             {
                 Id = Def(TorreDeGelo), DisplayName = "Torre de Gelo", Tag = BuildingTag.Gelo,
-                CanAttack = true, Damage = 0f, Range = 3.5f, ShotInterval = 0.8f, WoodPerShot = 0.5f,
+                CanAttack = true, Damage = 0f, Range = 4.8f, ShotInterval = 0.8f, WoodPerShot = 0.5f,
                 SlowFactor = 0.4f, SlowDuration = 2.5f, Targeting = TargetingRule.MaisAvancado,
                 Description = "Nao causa dano: compra tempo para as outras torres."
             });
@@ -96,7 +96,7 @@ namespace DestinyTogether.Data
             AddTower(new TowerSpec
             {
                 Id = Def(BalistaDeImpacto), DisplayName = "Balista de Impacto", Tag = BuildingTag.Ferro,
-                Damage = 6f, Range = 3f, ShotInterval = 1.5f, Knockback = 1.2f, WoodPerShot = 1f,
+                Damage = 6f, Range = 4.2f, ShotInterval = 1.5f, Knockback = 1.2f, WoodPerShot = 1f,
                 Description = "Empurra. Quando o inimigo vira esponja, empurrao vale mais que dano."
             });
 
@@ -217,14 +217,14 @@ namespace DestinyTogether.Data
             AddHero(new HeroSpec
             {
                 Id = Def(Guarda), DisplayName = "Guarda", Class = HeroClass.Guarda,
-                MoveSpeed = 5.2f, MaxHealth = 130f, AttackDamage = 14f, AttackRadius = 2.2f,
+                MoveSpeed = 7.0f, MaxHealth = 130f, AttackDamage = 14f, AttackRadius = 2.9f,
                 AttackInterval = 0.45f, CarryCapacity = 10f
             });
 
             AddHero(new HeroSpec
             {
                 Id = Def(Lenhador), DisplayName = "Lenhador", Class = HeroClass.Lenhador,
-                MoveSpeed = 5.5f, MaxHealth = 100f, AttackDamage = 10f, AttackRadius = 2.4f,
+                MoveSpeed = 7.4f, MaxHealth = 100f, AttackDamage = 10f, AttackRadius = 3.1f,
                 AttackInterval = 0.5f, CarryCapacity = 20f, HarvestSpeedMultiplier = 2f,
                 DepositTime = 0.25f
             });
@@ -232,14 +232,14 @@ namespace DestinyTogether.Data
             AddHero(new HeroSpec
             {
                 Id = Def(Golem), DisplayName = "Golem", Class = HeroClass.Golem,
-                MoveSpeed = 4.2f, MaxHealth = 200f, AttackDamage = 18f, AttackRadius = 2f,
+                MoveSpeed = 5.7f, MaxHealth = 200f, AttackDamage = 18f, AttackRadius = 2.7f,
                 AttackInterval = 0.7f, CarryCapacity = 14f
             });
 
             AddHero(new HeroSpec
             {
                 Id = Def(Arauto), DisplayName = "Arauto", Class = HeroClass.Arauto,
-                MoveSpeed = 6.5f, MaxHealth = 85f, AttackDamage = 9f, AttackRadius = 2.8f,
+                MoveSpeed = 8.8f, MaxHealth = 85f, AttackDamage = 9f, AttackRadius = 3.6f,
                 AttackInterval = 0.35f, CarryCapacity = 10f
             });
         }

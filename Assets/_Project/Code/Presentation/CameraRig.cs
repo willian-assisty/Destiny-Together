@@ -15,10 +15,12 @@ namespace DestinyTogether.Presentation
         [Header("Enquadramento")]
         public float Pitch = 52f;
         public float Yaw = 45f;
-        public float Distance = 26f;
-        public float MinDistance = 12f;
-        public float MaxDistance = 46f;
-        public float ZoomSpeed = 6f;
+        // Calibrado para o tabuleiro de 21x21: perto o bastante para ler o próprio herói, longe
+        // o bastante para o Preparo mostrar a cidade inteira num olhar.
+        public float Distance = 34f;
+        public float MinDistance = 14f;
+        public float MaxDistance = 62f;
+        public float ZoomSpeed = 8f;
 
         [Header("Seguimento")]
         public float FollowSmoothing = 6f;

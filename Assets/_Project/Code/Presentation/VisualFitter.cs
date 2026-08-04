@@ -37,7 +37,10 @@ namespace DestinyTogether.Presentation
                 return;
             }
 
-            if (!TryGetLocalBounds(instance, out var bounds))
+            // Medir no espaço do PAI, não no do próprio objeto: medindo no espaço local dele a
+            // rotação que acabamos de aplicar se cancelaria, e o encaixe usaria as dimensões
+            // erradas — largura de peça deitada tratada como largura de peça em pé.
+            if (!TryGetBoundsInParent(instance, out var bounds))
             {
                 t.localPosition = entry.Offset;
                 return;
@@ -47,7 +50,18 @@ namespace DestinyTogether.Presentation
             float target = entry.TargetCells > 0.01f ? entry.TargetCells : 1f;
             float multiplier = entry.ScaleMultiplier > 0.001f ? entry.ScaleMultiplier : 1f;
 
-            float scale = footprint > 0.0001f ? target / footprint * multiplier : multiplier;
+            float scale = footprint > 0.0001f ? target / footprint : 1f;
+
+            // Teto de altura: normalizar só pela largura faz uma peça alta e estreita virar um
+            // arranha-céu. Uma árvore com base de 1 unidade e 14 de altura, normalizada para 1,8
+            // célula de largura, sairia com 25 células de altura — mais alta que a cidade inteira.
+            if (entry.MaxHeightCells > 0.01f && bounds.size.y > 0.0001f)
+            {
+                float heightScale = entry.MaxHeightCells / bounds.size.y;
+                if (heightScale < scale) scale = heightScale;
+            }
+
+            scale *= multiplier;
             t.localScale = Vector3.one * scale;
 
             // Base no chão e centro em XZ: sem isso a peça flutua ou afunda conforme o pivot
@@ -56,14 +70,21 @@ namespace DestinyTogether.Presentation
             t.localPosition = offset + entry.Offset;
         }
 
-        /// <summary>Bounds combinados de todos os renderers, no espaço local da instância.</summary>
-        public static bool TryGetLocalBounds(GameObject instance, out Bounds bounds)
+        /// <summary>
+        /// Bounds combinados dos renderers, no espaço do PAI da instância — ou seja, JÁ com a
+        /// rotação de correção aplicada. É o que permite endireitar uma peça deitada e ainda
+        /// assim encaixá-la pela largura certa.
+        /// </summary>
+        public static bool TryGetBoundsInParent(GameObject instance, out Bounds bounds)
         {
             bounds = default;
             var renderers = instance.GetComponentsInChildren<Renderer>(includeInactive: false);
             if (renderers == null || renderers.Length == 0) return false;
 
-            var root = instance.transform.worldToLocalMatrix;
+            var reference = instance.transform.parent != null
+                ? instance.transform.parent
+                : instance.transform;
+            var root = reference.worldToLocalMatrix;
             bool started = false;
 
             foreach (var r in renderers)

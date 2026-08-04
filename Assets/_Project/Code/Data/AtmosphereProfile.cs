@@ -31,10 +31,10 @@ namespace DestinyTogether.Data
         public bool FogEnabled = true;
         public Color FogColor = new Color(0.09f, 0.10f, 0.14f);
         public FogMode FogMode = FogMode.ExponentialSquared;
-        // 0.022 fecha o horizonte sem apagar os pilares de Faixa na borda do mapa — eles são a
-        // telegrafia da ameaça, e névoa que esconde informação de jogo é clima caro demais.
-        // Suba para ~0.035 se quiser mais opressivo; passe de 0.05 e a Bússola some.
-        [Range(0f, 0.2f)] public float FogDensity = 0.022f;
+        // 0.045 fecha o mundo a ~30 unidades: a horda surge do escuro em vez de estar sempre à
+        // vista. Os pilares de Faixa foram trazidos para dentro desse alcance justamente para
+        // continuarem legíveis — névoa que engole a telegrafia da ameaça é clima caro demais.
+        [Range(0f, 0.2f)] public float FogDensity = 0.045f;
         [Tooltip("Usado apenas no modo Linear.")]
         public float FogStart = 12f;
         public float FogEnd = 48f;

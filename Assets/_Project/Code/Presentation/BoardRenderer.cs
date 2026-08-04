@@ -67,10 +67,25 @@ namespace DestinyTogether.Presentation
             ground.transform.SetParent(_root, false);
             ground.transform.localScale = new Vector3(radius * 2.6f, 0.2f, radius * 2.6f);
             ground.transform.position = GridToWorld.ToWorld(_grid.Center, -0.15f);
-            ground.GetComponent<Renderer>().sharedMaterial =
-                _profile != null && _profile.GroundMaterial != null
-                    ? _profile.GroundMaterial
-                    : _factory.GetMaterial(GroundColor);
+
+            var groundRenderer = ground.GetComponent<Renderer>();
+            if (_profile != null && _profile.GroundMaterial != null)
+            {
+                groundRenderer.sharedMaterial = _profile.GroundMaterial;
+
+                // Escurece e repete a textura por property block, sem editar o material do pack:
+                // esticada uma única vez por 47 unidades ela vira uma mancha lisa cor de areia,
+                // que foi parte do "não vejo nada além de uma pedra enorme".
+                float tiling = radius * 2.6f / 4f;
+                groundRenderer.GetPropertyBlock(_block);
+                _block.SetColor(ShaderIds.BaseColor, _profile.GroundTint);
+                _block.SetVector(ShaderIds.BaseMapST, new Vector4(tiling, tiling, 0f, 0f));
+                groundRenderer.SetPropertyBlock(_block);
+            }
+            else
+            {
+                groundRenderer.sharedMaterial = _factory.GetMaterial(GroundColor);
+            }
         }
 
         private void BuildTiles()
@@ -108,9 +123,12 @@ namespace DestinyTogether.Presentation
                 Object.Destroy(pillar.GetComponent<Collider>());
                 pillar.transform.SetParent(container, false);
 
-                var pos = _grid.Center + LaneGeometry.DirectionOf(lane) * content.Arena.OutskirtsRadius;
+                // Os pilares NÃO ficam no anel de spawn: com névoa densa eles sumiriam justamente
+                // quando mais importam. Eles marcam a DIREÇÃO da ameaça, não o ponto exato de
+                // nascimento, então vivem a meio caminho — dentro do alcance de visão.
+                var pos = _grid.Center + LaneGeometry.DirectionOf(lane) * (content.Arena.OutskirtsRadius * 0.55f);
                 pillar.transform.position = GridToWorld.ToWorld(pos, 0.5f);
-                pillar.transform.localScale = new Vector3(1.2f, 1f, 1.2f);
+                pillar.transform.localScale = new Vector3(1.6f, 1f, 1.6f);
 
                 _lanePillars[i] = pillar.transform;
                 _laneRenderers[i] = pillar.GetComponent<Renderer>();
@@ -204,7 +222,7 @@ namespace DestinyTogether.Presentation
         {
             var pillar = _lanePillars[(int)lane];
             if (pillar == null) return;
-            pillar.localScale = new Vector3(2f, pillar.localScale.y * 1.15f, 2f);
+            pillar.localScale = new Vector3(2.6f, pillar.localScale.y * 1.15f, 2.6f);
         }
 
         public void TickPillars(float dt)
@@ -214,8 +232,8 @@ namespace DestinyTogether.Presentation
                 var p = _lanePillars[i];
                 if (p == null) continue;
                 var s = p.localScale;
-                s.x = Mathf.Lerp(s.x, 1.2f, 1f - Mathf.Exp(-6f * dt));
-                s.z = Mathf.Lerp(s.z, 1.2f, 1f - Mathf.Exp(-6f * dt));
+                s.x = Mathf.Lerp(s.x, 1.6f, 1f - Mathf.Exp(-6f * dt));
+                s.z = Mathf.Lerp(s.z, 1.6f, 1f - Mathf.Exp(-6f * dt));
                 p.localScale = s;
             }
         }

@@ -161,10 +161,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7d1a5c9e4f2b48a7b3c6d0e8f1a2b3c4, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   Content: {fileID: 0}
-  Visuals: {fileID: 0}
+  Visuals: {fileID: 11400000, guid: d681e769403cf114ebaaf7cfc093b2c2, type: 2}
+  Atmosfera: {fileID: 11400000, guid: 664414bf4ef16da4fa1def5dc9fe0ad3, type: 2}
   PularMenu: 0
   JogadoresAoPularMenu: 1
   LogPhaseChanges: 1

@@ -193,17 +193,20 @@ namespace DestinyTogether.Data
     [CreateAssetMenu(menuName = "Destiny Together/Arena", fileName = "Arena_")]
     public sealed class ArenaDefinition : ScriptableObject
     {
-        [Tooltip("Lado do tabuleiro construivel.")] public int GridSize = 11;
-        [Tooltip("Lado da Prefeitura, no centro.")] public int TownHallSize = 3;
+        [Tooltip("Lado do tabuleiro construivel. Use impar para a Prefeitura ficar centrada.")]
+        public int GridSize = 21;
+        [Tooltip("Lado da Prefeitura, no centro.")] public int TownHallSize = 5;
         [Tooltip("Raio dos Arredores em celulas. Monstros nascem nesse anel.")]
-        public float OutskirtsRadius = 18f;
+        public float OutskirtsRadius = 36f;
 
         [Header("Cota FIXA de colheita por turno")]
-        public int TreeCount = 6;
+        [Tooltip("Dispersao dos nos dentro de cada canto, em celulas.")]
+        public float CornerSpread = 7f;
+        public int TreeCount = 12;
         public float WoodPerTree = 15f;
-        public int RockCount = 4;
+        public int RockCount = 8;
         public float StonePerRock = 10f;
-        public int ChestCount = 2;
+        public int ChestCount = 4;
         public float GoldPerChest = 20f;
 
         public ArenaSpec Bake() => new ArenaSpec
@@ -211,6 +214,7 @@ namespace DestinyTogether.Data
             GridSize = GridSize,
             TownHallSize = TownHallSize,
             OutskirtsRadius = OutskirtsRadius,
+            CornerSpread = CornerSpread,
             TreeCount = TreeCount,
             WoodPerTree = WoodPerTree,
             RockCount = RockCount,

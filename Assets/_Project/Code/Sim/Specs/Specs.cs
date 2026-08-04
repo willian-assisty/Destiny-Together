@@ -142,16 +142,24 @@ namespace DestinyTogether.Sim
 
     public sealed class ArenaSpec
     {
-        /// <summary>Lado do grid construivel (11 => 11x11).</summary>
-        public int GridSize = 11;
-        /// <summary>Lado da Prefeitura em celulas (3 => ocupa 3x3 no centro).</summary>
-        public int TownHallSize = 3;
+        /// <summary>Lado do grid construivel. Impar para a Prefeitura ficar centrada de verdade.</summary>
+        public int GridSize = 21;
+        /// <summary>Lado da Prefeitura em celulas (5 => ocupa 5x5 no centro).</summary>
+        public int TownHallSize = 5;
         /// <summary>Raio dos Arredores em celulas, medido do centro. Monstros nascem nesse anel.</summary>
-        public float OutskirtsRadius = 18f;
+        public float OutskirtsRadius = 36f;
 
-        public int TreeCount = 6;
-        public int RockCount = 4;
-        public int ChestCount = 2;
+        /// <summary>
+        /// Recursos ficam agrupados nos QUATRO CANTOS em vez de espalhados em anel.
+        /// Colher deixa de ser "andar em volta" e vira uma decisao de rota: ir ao canto custa
+        /// tempo e distancia da Faixa quente, e cada canto fica naturalmente sob a guarda de um
+        /// Quadrante — o que da a cada jogador um lugar seu sem impedir ninguem de socorrer.
+        /// </summary>
+        public float CornerSpread = 7f;
+
+        public int TreeCount = 12;
+        public int RockCount = 8;
+        public int ChestCount = 4;
         /// <summary>Cota FIXA por turno: ficar 5 min no Preparo nao rende 1 de madeira a mais que ficar 60s.</summary>
         public float WoodPerTree = 15f;
         public float StonePerRock = 10f;
@@ -177,7 +185,7 @@ namespace DestinyTogether.Sim
         public float BalancoSeconds = 25f;
 
         /// <summary>Curva de XP multiplicada pelo n de jogadores: agencia per capita identica a 1, 2, 3 ou 4.</summary>
-        public float XpPerCityLevelBase = 45f;
+        public float XpPerCityLevelBase = 38f;
         public float XpPerCityLevelGrowth = 1.3f;
         /// <summary>XP por unidade de recurso DEPOSITADA. Faz da Logistica um caminho de progresso,
         /// nao so de manutencao — quem passa o turno abastecendo o Silo tambem faz a cidade subir.</summary>

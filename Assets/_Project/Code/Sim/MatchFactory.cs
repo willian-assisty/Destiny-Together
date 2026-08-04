@@ -11,7 +11,7 @@ namespace DestinyTogether.Sim
         /// para a primeira Investida e a Prefeitura cai antes de alguem entender o jogo.
         /// Quatro cartas dao ao Preparo inicial uma decisao de LAYOUT, que e o assunto do jogo.
         /// </summary>
-        private const int StartingHandSize = 4;
+        private const int StartingHandSize = 7;
 
         /// <param name="chosenHeroes">
         /// Heroi de cada assento, na ordem. Entradas invalidas (ou lista curta) caem para o
@@ -113,25 +113,43 @@ namespace DestinyTogether.Sim
                                                  Rng rng, SimEventLog log)
         {
             var arena = content.Arena;
-            float inner = state.Grid.Size * 0.5f + 2f;
-            float outer = arena.OutskirtsRadius - 2f;
-            if (outer <= inner) outer = inner + 4f;
 
-            Add(state, rng, HarvestNodeKind.Arvore, arena.TreeCount, arena.WoodPerTree, inner, outer, log);
-            Add(state, rng, HarvestNodeKind.Rocha, arena.RockCount, arena.StonePerRock, inner, outer, log);
-            Add(state, rng, HarvestNodeKind.Bau, arena.ChestCount, arena.GoldPerChest, inner, outer, log);
+            // Distância do centro até o centro de cada bolsão de recursos: entre a borda da
+            // cidade e o anel de spawn, mais perto da cidade — colher não pode significar estar
+            // no lugar onde os monstros nascem.
+            float cityEdge = state.Grid.Size * 0.5f;
+            float corner = MathUtil.Lerp(cityEdge + 3f, arena.OutskirtsRadius, 0.45f);
+
+            Add(state, rng, HarvestNodeKind.Arvore, arena.TreeCount, arena.WoodPerTree, corner, arena, log);
+            Add(state, rng, HarvestNodeKind.Rocha, arena.RockCount, arena.StonePerRock, corner, arena, log);
+            Add(state, rng, HarvestNodeKind.Bau, arena.ChestCount, arena.GoldPerChest, corner, arena, log);
         }
 
+        /// <summary>
+        /// Distribui os nós pelos QUATRO CANTOS (NE, SE, SO, NO), em rodízio, com dispersão
+        /// dentro de cada canto.
+        ///
+        /// O rodízio importa: se cada tipo caísse todo num canto só, madeira e pedra teriam donos
+        /// fixos e o time inteiro brigaria por um ponto. Alternando, cada canto tem um pouco de
+        /// tudo, e escolher qual canto visitar vira uma decisão de rota — não de recurso.
+        /// </summary>
         private static void Add(MatchState state, Rng rng, HarvestNodeKind kind, int count, float amount,
-                                float inner, float outer, SimEventLog log)
+                                float cornerDistance, ArenaSpec arena, SimEventLog log)
         {
+            // Diagonais: 45, 135, 225, 315 graus a partir do norte.
             for (int i = 0; i < count; i++)
             {
+                float cornerAngle = 45f + 90f * (i % 4);
+                var cornerCenter = state.Grid.Center + Vec2.FromCompassDegrees(cornerAngle) * cornerDistance;
+
+                float spread = arena.CornerSpread;
+                var offset = new Vec2(rng.Range(-spread, spread), rng.Range(-spread, spread));
+
                 var node = new HarvestNodeState
                 {
                     Id = state.NewEntityId(),
                     Kind = kind,
-                    Position = rng.PointInRing(state.Grid.Center, inner, outer),
+                    Position = cornerCenter + offset,
                     Remaining = amount,
                     TotalPerHarvest = amount
                 };

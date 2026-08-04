@@ -33,17 +33,24 @@ namespace DestinyTogether.Data
         [Tooltip("Rotacao local em graus. Use quando o modelo nao vem com +Z para a frente.")]
         public Vector3 EulerAngles;
 
+        [Tooltip("Teto de altura em CELULAS. 0 = sem limite. O encaixe normaliza pela LARGURA, " +
+                 "entao uma peca alta e estreita (arvore, torre) estoura em altura se ninguem " +
+                 "segurar — este campo e quem segura.")]
+        public float MaxHeightCells;
+
         [Tooltip("Desliga o auto-fit e usa a escala original do prefab.")]
         public bool KeepOriginalScale;
 
         public DefId Id => DefId.FromName(DefName);
 
-        public static VisualEntry Create(string defName, GameObject prefab, float targetCells = 1f)
+        public static VisualEntry Create(string defName, GameObject prefab, float targetCells = 1f,
+                                         float maxHeightCells = 0f)
             => new VisualEntry
             {
                 DefName = defName,
                 Prefab = prefab,
                 TargetCells = targetCells,
+                MaxHeightCells = maxHeightCells,
                 ScaleMultiplier = 1f,
                 Offset = Vector3.zero,
                 EulerAngles = Vector3.zero
@@ -68,6 +75,10 @@ namespace DestinyTogether.Data
         public string DisplayName = "Perfil";
         [TextArea] public string Notes = "";
 
+        [Tooltip("Versao do mapeamento que gerou este asset. Quando o codigo traz um mapeamento " +
+                 "mais novo, o setup regenera sozinho em vez de deixar valores velhos em silencio.")]
+        public int SetupVersion;
+
         [Header("Predios e monstros e herois")]
         public List<VisualEntry> Entries = new List<VisualEntry>();
 
@@ -88,8 +99,22 @@ namespace DestinyTogether.Data
         [Tooltip("Espalhados pelos Arredores so para dar contexto. Nao afetam a simulacao.")]
         public List<GameObject> ScatterProps = new List<GameObject>();
         [Range(0, 400)] public int ScatterCount = 0;
-        public float ScatterMinScale = 0.8f;
-        public float ScatterMaxScale = 1.4f;
+
+        [Tooltip("Largura alvo de cada prop, em CELULAS. Props de cenario de pack costumam ter " +
+                 "dezenas de unidades — sem normalizar, um penhasco cobre a cidade inteira.")]
+        public float ScatterTargetCells = 1.6f;
+
+        [Tooltip("Variacao aleatoria de tamanho aplicada DEPOIS da normalizacao.")]
+        public float ScatterMinScale = 0.7f;
+        public float ScatterMaxScale = 1.5f;
+
+        [Tooltip("Correcao de eixo dos props de cenario. O pack Polylised e Z-up e precisa de -90 em X.")]
+        public Vector3 ScatterEulerAngles = new Vector3(-90f, 0f, 0f);
+
+        [Header("Tom do chao")]
+        [Tooltip("Multiplica a cor do material do chao. Escurecer casa o pack de deserto com a " +
+                 "atmosfera noturna sem precisar autorar um material novo.")]
+        public Color GroundTint = new Color(0.45f, 0.44f, 0.42f, 1f);
 
         private Dictionary<int, VisualEntry> _lookup;
 

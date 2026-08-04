@@ -185,5 +185,7 @@ namespace DestinyTogether.Presentation
     public static class ShaderIds
     {
         public static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        /// <summary>Tiling e offset do albedo. x,y = repeticoes; z,w = deslocamento.</summary>
+        public static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
     }
 }

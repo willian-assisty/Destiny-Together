@@ -109,13 +109,24 @@ namespace DestinyTogether.Presentation
                 if (prefab == null) continue;
 
                 var point = rng.PointInRing(center, innerRadius, outerRadius);
-                var instance = Object.Instantiate(prefab, container);
-                instance.transform.position = GridToWorld.ToWorld(point);
-                instance.transform.rotation = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
-                instance.transform.localScale = Vector3.one *
-                    rng.Range(_profile.ScatterMinScale, _profile.ScatterMaxScale);
 
-                foreach (var c in instance.GetComponentsInChildren<Collider>(true)) c.enabled = false;
+                // Um holder recebe posição e rotação; a arte fica dentro dele, normalizada.
+                // Sem este passo o prop entra em escala NATIVA — e prop de cenário de pack tem
+                // dezenas de unidades, o que põe um penhasco maior que a cidade na frente da
+                // câmera. Foi exatamente esse o bug da "pedra enorme".
+                var holder = new GameObject("Prop");
+                holder.transform.SetParent(container, false);
+                holder.transform.position = GridToWorld.ToWorld(point);
+                holder.transform.rotation = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
+
+                var instance = Object.Instantiate(prefab, holder.transform);
+                float target = _profile.ScatterTargetCells > 0.01f ? _profile.ScatterTargetCells : 1.6f;
+                VisualFitter.Fit(instance, new VisualEntry
+                {
+                    TargetCells = target,
+                    ScaleMultiplier = rng.Range(_profile.ScatterMinScale, _profile.ScatterMaxScale),
+                    EulerAngles = _profile.ScatterEulerAngles
+                });
             }
         }
 

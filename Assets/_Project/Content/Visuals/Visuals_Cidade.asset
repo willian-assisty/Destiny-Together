@@ -15,84 +15,96 @@ MonoBehaviour:
   DisplayName: Cidade sitiada
   Notes: Polylised - Medieval Desert City + Fantasy Forest. Gerado por Destiny Together
     > Aplicar arte importada.
+  SetupVersion: 4
   Entries:
   - DefName: Balestra
     Prefab: {fileID: 1356718791037878, guid: d4bbfcf82f1bd6f43a1ef19c811777fa, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 2.6
     KeepOriginalScale: 0
   - DefName: TorreDeGelo
     Prefab: {fileID: 1933501008555322, guid: 3d5764d3cca272942b5087884ae75b75, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 2.6
     KeepOriginalScale: 0
   - DefName: BalistaDeImpacto
     Prefab: {fileID: 1534625454089636, guid: f26b24b97b5031e4d8984eb41762eda1, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 2.2
     KeepOriginalScale: 0
   - DefName: PostoDeVigia
     Prefab: {fileID: 1085690542139798, guid: b8a64239d2d33cc45a19f47b821be342, type: 3}
     TargetCells: 0.85
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 3.2
     KeepOriginalScale: 0
   - DefName: Braseiro
     Prefab: {fileID: 1235266061306044, guid: 4a24c2abcf3d91547bdeff629e1532c3, type: 3}
     TargetCells: 0.8
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.4
     KeepOriginalScale: 0
   - DefName: Muralha
     Prefab: {fileID: 1769100193472926, guid: 263aefa800a1fe74f92bb203147304d3, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.2
     KeepOriginalScale: 0
   - DefName: Serraria
     Prefab: {fileID: 1624312244548522, guid: 144d1d48e42b16e408d98127b892490c, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.6
     KeepOriginalScale: 0
   - DefName: Pedreira
     Prefab: {fileID: 1448931260341668, guid: 914008923a1f33345b91f7350da887df, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.6
     KeepOriginalScale: 0
   - DefName: Oficina
     Prefab: {fileID: 1924505923262870, guid: d6dfddd766e16874bafbff7d2f2501b3, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.6
     KeepOriginalScale: 0
   - DefName: Deposito
     Prefab: {fileID: 1174801331850410, guid: 84573fa2e72500d49835406b46d71622, type: 3}
     TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1
     KeepOriginalScale: 0
   Tree:
     DefName: Arvore
     Prefab: {fileID: 1656880635380694, guid: 4215dcb581b5b634c914cd0cf1ccd81b, type: 3}
-    TargetCells: 1.8
+    TargetCells: 1.6
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 3.2
     KeepOriginalScale: 0
   Rock:
     DefName: Rocha
@@ -100,7 +112,8 @@ MonoBehaviour:
     TargetCells: 1.3
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 1.1
     KeepOriginalScale: 0
   Chest:
     DefName: Bau
@@ -108,17 +121,19 @@ MonoBehaviour:
     TargetCells: 0.9
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 0.9
     KeepOriginalScale: 0
   TownHall:
     DefName: Prefeitura
     Prefab: {fileID: 1044818417282170, guid: 9a0029d66f7229f4dacf38d09d5ddea3, type: 3}
-    TargetCells: 3.2
+    TargetCells: 4.5
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
-    EulerAngles: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: -90, y: 0, z: 0}
+    MaxHeightCells: 7
     KeepOriginalScale: 0
-  GroundMaterial: {fileID: 2100000, guid: 02f626fd2f11216458890862c5864d34, type: 2}
+  GroundMaterial: {fileID: 2100000, guid: 40e69315dc8bd0b45be8bf7143248fba, type: 2}
   TileMaterial: {fileID: 0}
   ScatterProps:
   - {fileID: 1801292862687298, guid: ccdba26d869ffd548856ea7eca38ac97, type: 3}
@@ -137,6 +152,9 @@ MonoBehaviour:
   - {fileID: 1107357078673850, guid: b7980771a74d0644ab032498d1948ca2, type: 3}
   - {fileID: 1210640465679106, guid: 4d4f3743a7b39904aa665563fe459249, type: 3}
   - {fileID: 1319930702440686, guid: 55eac99f5049e5045a42f2528f476504, type: 3}
-  ScatterCount: 110
+  ScatterCount: 160
+  ScatterTargetCells: 1.6
   ScatterMinScale: 0.7
   ScatterMaxScale: 1.5
+  ScatterEulerAngles: {x: -90, y: 0, z: 0}
+  GroundTint: {r: 0.4, g: 0.35, b: 0.21, a: 1}
