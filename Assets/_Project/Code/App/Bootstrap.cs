@@ -62,6 +62,8 @@ namespace DestinyTogether.App
         private PhaseId _lastPhase = PhaseId.None;
         private MatchSetup _lastSetup;
         private AtmosphereProfile _atmosphere;
+        /// <summary>Sol direcional. Guardado porque o ciclo dia/noite o move e o tinge por frame.</summary>
+        private Light _sun;
 
         public MatchSimulation Simulation => _sim;
 
@@ -103,6 +105,7 @@ namespace DestinyTogether.App
             // Sem asset de atmosfera o jogo ainda abre — e já abre escuro, porque o clima
             // fechado é premissa do desenho, não um acabamento opcional.
             _atmosphere = Atmosfera != null ? Atmosfera : AtmosphereProfile.CreateDefaultDark();
+            _sun = sun;
             AtmosphereApplier.Apply(_atmosphere, cam, sun);
         }
 
@@ -185,11 +188,21 @@ namespace DestinyTogether.App
 
             _input.Tick();
             _sim.Advance(dt);
-            _presentation.Tick(dt);
 
+            // O foco sai antes da apresentacao porque ele decide o que existe: o mundo procedural
+            // e o chao sao materializados em volta dele, nao em volta da vila.
             var localPlayer = _sim.State.GetPlayer(new PlayerId(_lastSetup.LocalPlayerIndex));
             var hero = _sim.State.GetHero(localPlayer?.Hero ?? EntityId.None);
+            var focus = hero != null ? hero.Position : _sim.State.CityCenter;
+
+            _presentation.Tick(dt, focus);
             if (hero != null) _camera.SetFocus(hero.Position);
+
+            // O ceu acompanha o relogio da fase. Feito aqui, e nao na fronteira de fase, porque
+            // o entardecer e continuo: se a luz so mudasse quando a fase muda, o jogador seria
+            // pego de surpresa por uma noite que ele deveria ter visto chegar.
+            AtmosphereApplier.Apply(_atmosphere, _camera != null ? _camera.Camera : null, _sun,
+                                    DayNightCycle.NightAmount(_sim.State, _content.Rules));
 
             if (_sim.State.Phase != _lastPhase)
             {
@@ -198,9 +211,9 @@ namespace DestinyTogether.App
                 if (LogPhaseChanges)
                     Debug.Log($"[Destiny Together] Turno {_sim.State.TurnNumber} · {_lastPhase}");
             }
-            else if (_sim.State.Phase == PhaseId.Preparo)
+            else if (_sim.State.Phase == PhaseId.Dia)
             {
-                // Durante o Preparo o Prognostico precisa acompanhar cada predio erguido.
+                // Durante o Dia o Prognostico precisa acompanhar cada predio erguido.
                 RefreshForecast();
             }
 

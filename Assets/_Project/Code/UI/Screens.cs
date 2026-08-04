@@ -39,7 +39,8 @@ namespace DestinyTogether.UI
 
             GUILayout.Space(6);
             GUILayout.Label("DESTINY  TOGETHER", s.Huge);
-            GUILayout.Label("<i>A cidade nao anda. Os monstros vem por turno. Defendam juntos.</i>", s.Label);
+            GUILayout.Label("<i>De dia a mata esconde coisas. De noite ela devolve monstros. " +
+                            "Cinco noites — defendam juntos.</i>", s.Label);
             GUILayout.Space(14);
 
             GUILayout.BeginVertical(s.Panel);
@@ -185,7 +186,7 @@ namespace DestinyTogether.UI
             GUILayout.BeginArea(new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h), s.Panel);
 
             GUILayout.Label("<b>PAUSA</b>", s.Big);
-            GUILayout.Label($"Turno {sim.State.TurnNumber}/{sim.Content.Rules.TotalTurns} · " +
+            GUILayout.Label($"Noite {sim.State.TurnNumber}/{sim.Content.Rules.TotalTurns} · " +
                             $"{sim.State.Phase} · Prefeitura {sim.State.TownHallHealth:0}", s.Label);
             GUILayout.Space(14);
 
@@ -216,8 +217,8 @@ namespace DestinyTogether.UI
                                 : "<color=#ff5555><b>A PREFEITURA CAIU</b></color>", s.Big);
             GUILayout.Space(4);
             GUILayout.Label(win
-                ? "Nove turnos, um kaiju, e a planta baixa continua de pe."
-                : $"A cidade aguentou ate o turno {sim.State.TurnNumber} de {sim.Content.Rules.TotalTurns}.",
+                ? $"Cinco amanheceres, um kaiju, e a planta baixa continua de pe."
+                : $"A cidade aguentou ate a noite {sim.State.TurnNumber} de {sim.Content.Rules.TotalTurns}.",
                 s.Label);
 
             GUILayout.Space(12);
@@ -237,7 +238,8 @@ namespace DestinyTogether.UI
                 string hex = ColorUtility.ToHtmlStringRGB(c);
                 GUILayout.Label($"<color=#{hex}>■</color> {p.DisplayName,-11} " +
                                 $"depositos <b>{p.Deposits,3}</b>   reparos <b>{p.Repairs,3}</b>   " +
-                                $"turnos <b>{p.TurnsSurvived,2}</b>   ouro <b>{p.Gold,4:0}</b>", s.Mono);
+                                $"achados <b>{p.CachesFound,3}</b>   noites <b>{p.TurnsSurvived,2}</b>   " +
+                                $"ouro <b>{p.Gold,4:0}</b>", s.Mono);
             }
 
             GUILayout.FlexibleSpace();

@@ -202,12 +202,42 @@ namespace DestinyTogether.Data
         [Header("Cota FIXA de colheita por turno")]
         [Tooltip("Dispersao dos nos dentro de cada canto, em celulas.")]
         public float CornerSpread = 7f;
-        public int TreeCount = 12;
+        public int TreeCount = 20;
         public float WoodPerTree = 15f;
-        public int RockCount = 8;
+        public int RockCount = 14;
         public float StonePerRock = 10f;
-        public int ChestCount = 4;
+        public int ChestCount = 7;
         public float GoldPerChest = 20f;
+
+        [Header("Exploracao — Esconderijos da mata")]
+        [Tooltip("Quantos nascem escondidos a cada amanhecer. O que ninguem achar some no dia seguinte.")]
+        public int CacheCount = 14;
+        [Range(0f, 1f)]
+        [Tooltip("Fracao que e Relicario. O resto e Suprimento.")]
+        public float RelicFraction = 0.22f;
+        [Tooltip("Anel onde nascem. Comeca DEPOIS dos bolsoes de recurso, para nao virar a mesma viagem.")]
+        public float CacheInnerRadius = 27f;
+        public float CacheOuterRadius = 35f;
+        [Tooltip("Distancia em que o Esconderijo acende na tela.")]
+        public float CacheRevealRadius = 7f;
+        [Tooltip("Distancia em que e recolhido ao passar por cima.")]
+        public float CachePickupRadius = 1.4f;
+        public float XpPerSupplyCache = 30f;
+        public float GoldPerSupplyCache = 8f;
+        public float XpPerRelicCache = 115f;
+        public float GoldPerRelicCache = 20f;
+
+        [Header("Mundo procedural — florestas e pedreiras sem fim")]
+        [Tooltip("Limite de seguranca de afastamento, em celulas. Nao e limite de design.")]
+        public float ExplorableRadius = 4000f;
+        [Tooltip("Folga entre o anel de spawn e o inicio do mundo procedural.")]
+        public float WorldClearance = 10f;
+        [Tooltip("Em quantas celulas a fronteira vai de pobre a rica.")]
+        public float WorldRichnessRange = 320f;
+        [Range(0f, 1f)] public float WorldCacheChanceNear = 0.07f;
+        [Range(0f, 1f)] public float WorldCacheChanceFar = 0.26f;
+        [Tooltip("Raio em chunks (24 celulas) em que a simulacao materializa o mundo.")]
+        [Range(1, 8)] public int WorldStreamRadiusChunks = 4;
 
         public ArenaSpec Bake() => new ArenaSpec
         {
@@ -220,15 +250,32 @@ namespace DestinyTogether.Data
             RockCount = RockCount,
             StonePerRock = StonePerRock,
             ChestCount = ChestCount,
-            GoldPerChest = GoldPerChest
+            GoldPerChest = GoldPerChest,
+            CacheCount = CacheCount,
+            RelicFraction = RelicFraction,
+            CacheInnerRadius = CacheInnerRadius,
+            CacheOuterRadius = CacheOuterRadius,
+            CacheRevealRadius = CacheRevealRadius,
+            CachePickupRadius = CachePickupRadius,
+            XpPerSupplyCache = XpPerSupplyCache,
+            GoldPerSupplyCache = GoldPerSupplyCache,
+            XpPerRelicCache = XpPerRelicCache,
+            GoldPerRelicCache = GoldPerRelicCache,
+            ExplorableRadius = ExplorableRadius,
+            WorldClearance = WorldClearance,
+            WorldRichnessRange = WorldRichnessRange,
+            WorldCacheChanceNear = WorldCacheChanceNear,
+            WorldCacheChanceFar = WorldCacheChanceFar,
+            WorldStreamRadiusChunks = WorldStreamRadiusChunks
         };
     }
 
     [CreateAssetMenu(menuName = "Destiny Together/Regras da Partida", fileName = "Regras_")]
     public sealed class MatchRulesDefinition : ScriptableObject
     {
-        public int TotalTurns = 9;
-        public float TownHallMaxHealth = 600f;
+        [Tooltip("Noites ate a vitoria. Com o ciclo de 5+5 min, 5 noites = ~35-50 min de sessao.")]
+        public int TotalTurns = 5;
+        public float TownHallMaxHealth = 900f;
         [Range(0.05f, 1f)] public float MaxSingleHitFraction = 0.25f;
 
         [Header("Silo compartilhado")]
@@ -237,12 +284,15 @@ namespace DestinyTogether.Data
         public float StartingStone = 0f;
         public float StartingGoldPerPlayer = 0f;
 
-        [Header("Relogio das fases")]
-        public float PreparoMaxSeconds = 75f;
-        public float PreparoFirstActSeconds = 60f;
-        [Tooltip("Ao terceiro Pronto, o Preparo trava neste teto de segundos restantes.")]
-        public float PreparoClampOnThirdReady = 15f;
-        public float BalancoSeconds = 25f;
+        [Header("Ciclo dia/noite")]
+        [Tooltip("Duracao do Dia em segundos. E teto, nao piso: todos Prontos antecipa a noite.")]
+        public float DiaSeconds = 300f;
+        [Tooltip("Duracao da Noite em segundos. Piso E teto — a noite acaba na hora, sempre.")]
+        public float NoiteSeconds = 300f;
+        [Tooltip("Quanto antes do amanhecer os monstros param de nascer. O ceu clareia junto.")]
+        public float SpawnCutoffBeforeDawn = 45f;
+        [Tooltip("Ao terceiro Pronto, o Dia trava neste teto de segundos restantes.")]
+        public float PreparoClampOnThirdReady = 20f;
 
         [Header("Progressao")]
         [Tooltip("Multiplicada pelo n de jogadores: agencia per capita identica a 1, 2, 3 ou 4.")]
@@ -264,10 +314,10 @@ namespace DestinyTogether.Data
             SiloStartingWood = SiloStartingWood,
             StartingStone = StartingStone,
             StartingGoldPerPlayer = StartingGoldPerPlayer,
-            PreparoMaxSeconds = PreparoMaxSeconds,
-            PreparoFirstActSeconds = PreparoFirstActSeconds,
+            DiaSeconds = DiaSeconds,
+            NoiteSeconds = NoiteSeconds,
+            SpawnCutoffBeforeDawn = SpawnCutoffBeforeDawn,
             PreparoClampOnThirdReady = PreparoClampOnThirdReady,
-            BalancoSeconds = BalancoSeconds,
             XpPerCityLevelBase = XpPerCityLevelBase,
             XpPerCityLevelGrowth = XpPerCityLevelGrowth,
             XpPerResourceDeposited = XpPerResourceDeposited,

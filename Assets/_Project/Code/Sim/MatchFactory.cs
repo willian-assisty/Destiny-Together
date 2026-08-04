@@ -30,6 +30,9 @@ namespace DestinyTogether.Sim
                 MatchSeed = seed,
                 TurnNumber = 1,
                 Grid = new BoardGrid(arena.GridSize, arena.TownHallSize),
+                // Limite de seguranca, nao de design: o mundo procedural nao acaba, e a 7
+                // celulas/s levaria ~10 minutos de corrida em linha reta para encostar nele.
+                WorldRadius = arena.ExplorableRadius,
                 TownHallMaxHealth = rules.TownHallMaxHealth,
                 TownHallHealth = rules.TownHallMaxHealth,
                 MaxSingleHitFraction = rules.MaxSingleHitFraction,
@@ -92,21 +95,84 @@ namespace DestinyTogether.Sim
 
             var nodeRng = Rng.ForChannel(seed, 4, 0);
             PopulateHarvestNodes(state, content, nodeRng, null);
+            PopulateCaches(state, content, nodeRng, null);
 
             return state;
         }
 
         /// <summary>
-        /// Cota FIXA por turno. Ficar 5 minutos no Preparo nao rende 1 de madeira a mais que ficar
-        /// 60 segundos — e por isso que a fase pode nao ter timer duro sem virar exploravel.
+        /// Cota FIXA por dia. Ficar os 5 minutos inteiros nao rende 1 de madeira a mais que sair
+        /// em 60 segundos — e por isso que o Dia pode ter relogio longo sem virar farm obrigatorio.
+        /// O tempo que sobra so vale para EXPLORAR, que e onde o retorno nao tem teto.
         /// </summary>
         public static void RepopulateHarvestNodes(MatchState state, IContentDatabase content,
                                                   Rng rng, SimEventLog log)
         {
+            // SO os bolsoes da vila. O mundo procedural nao repovoa: um bosque exaurido continua
+            // exaurido, e valor novo exige ir mais longe. Renovar os dois faria da fronteira um
+            // farm com paisagem melhor.
             for (int i = state.Nodes.Count - 1; i >= 0; i--)
-                state.RemoveNode(state.Nodes[i]);
+                if (!state.Nodes[i].FromWorld) state.RemoveNode(state.Nodes[i]);
 
             PopulateHarvestNodes(state, content, rng, log);
+        }
+
+        /// <summary>
+        /// A mata esconde coisas novas a cada amanhecer. O que ninguem achou ontem some — nao
+        /// acumula.
+        ///
+        /// Acumular pareceria generoso e faria o contrario: quem deixasse de explorar por duas
+        /// noites encontraria o dobro na terceira, e a decisao "vale a pena sair hoje?" viraria
+        /// "saio quando der". Zerar mantem a pergunta viva todo dia.
+        /// </summary>
+        public static void RepopulateCaches(MatchState state, IContentDatabase content,
+                                            Rng rng, SimEventLog log)
+        {
+            for (int i = state.Caches.Count - 1; i >= 0; i--)
+                if (!state.Caches[i].FromWorld) state.RemoveCache(state.Caches[i]);
+
+            PopulateCaches(state, content, rng, log);
+        }
+
+        /// <summary>
+        /// Espalha os Esconderijos pelo anel de mata, num angulo qualquer.
+        ///
+        /// Ao contrario dos recursos, que ficam agrupados em quatro bolsoes conhecidos, estes
+        /// nascem em qualquer direcao. E a diferenca entre uma rota e uma busca: colher e ir a um
+        /// lugar que voce ja sabe onde fica; explorar e varrer o que voce nao sabe.
+        /// </summary>
+        private static void PopulateCaches(MatchState state, IContentDatabase content, Rng rng,
+                                           SimEventLog log = null)
+        {
+            var arena = content.Arena;
+            if (arena.CacheCount <= 0) return;
+
+            int relics = (int)(arena.CacheCount * MathUtil.Clamp01(arena.RelicFraction));
+
+            for (int i = 0; i < arena.CacheCount; i++)
+            {
+                bool isRelic = i < relics;
+
+                // Relicario nasce no terco externo do anel: o raro tem de estar longe, senao
+                // "raro" e so um numero e nao uma viagem.
+                float inner = isRelic
+                    ? MathUtil.Lerp(arena.CacheInnerRadius, arena.CacheOuterRadius, 0.6f)
+                    : arena.CacheInnerRadius;
+
+                var cache = new CacheState
+                {
+                    Id = state.NewEntityId(),
+                    Kind = isRelic ? CacheKind.Relicario : CacheKind.Suprimento,
+                    Position = rng.PointInRing(state.Grid.Center, inner, arena.CacheOuterRadius),
+                    Xp = isRelic ? arena.XpPerRelicCache : arena.XpPerSupplyCache,
+                    Gold = isRelic ? arena.GoldPerRelicCache : arena.GoldPerSupplyCache
+                };
+
+                // Nenhum evento aqui de proposito: um Esconderijo que nasce nao "acontece" para
+                // ninguem. A apresentacao so cria a view em CacheRevealed — e isso que o mantem
+                // invisivel sem precisar de uma flag de visibilidade na camada de views.
+                state.RegisterCache(cache);
+            }
         }
 
         private static void PopulateHarvestNodes(MatchState state, IContentDatabase content,

@@ -80,6 +80,14 @@ namespace DestinyTogether.Sim
         public float HarvestProgress;
         public float DepositProgress;
 
+        /// <summary>
+        /// Ultimo chunk em que este heroi esteve. O streamer do mundo so refaz trabalho quando
+        /// alguem TROCA de chunk — andar dentro do mesmo quadrado de 24 celulas nao muda nada, e
+        /// isso e a maior parte dos ticks.
+        /// </summary>
+        public int LastChunkX = int.MinValue;
+        public int LastChunkZ = int.MinValue;
+
         /// <summary>Morto vira Espectro por alguns segundos: camera livre e ping — nunca fica sem funcao.</summary>
         public bool IsSpectre;
         public float RespawnRemaining;
@@ -95,9 +103,49 @@ namespace DestinyTogether.Sim
         public EntityId Id;
         public HarvestNodeKind Kind;
         public Vec2 Position;
-        /// <summary>Quantidade restante. Cota FIXA por turno: nao regenera alem disso.</summary>
+        /// <summary>Quantidade restante. Cota FIXA por dia: nao regenera alem disso.</summary>
         public float Remaining;
         public float TotalPerHarvest = 5f;
         public bool IsDepleted => Remaining <= 0f;
+
+        /// <summary>
+        /// Identidade no mundo procedural, ou 0 se veio dos bolsoes da vila.
+        ///
+        /// A diferenca e de regra, nao de origem: bolsao repovoa a cada amanhecer (cota fixa, e o
+        /// que impede o Dia de virar farm), mundo la fora e de uso unico. Esta chave e o que
+        /// permite lembrar SO o que foi consumido, em vez de guardar o mundo inteiro.
+        /// </summary>
+        public long WorldKey;
+        public bool FromWorld => WorldKey != 0L;
+    }
+
+    /// <summary>
+    /// Esconderijo escondido na mata. Nasce invisivel; um heroi que passa perto o REVELA, e
+    /// encostar nele o recolhe.
+    ///
+    /// Dois raios em vez de um, e a diferenca e o jogo inteiro: revelar de longe transforma
+    /// vagar pela floresta em algo que da retorno visivel ANTES de dar retorno mecanico. Um raio
+    /// so faria o jogador andar no escuro sem saber se esta perto — o que se sente como sorte,
+    /// nao como exploracao.
+    /// </summary>
+    public sealed class CacheState
+    {
+        public EntityId Id;
+        public CacheKind Kind;
+        public Vec2 Position;
+
+        /// <summary>Ja apareceu na tela de alguem.</summary>
+        public bool Revealed;
+        /// <summary>Ja foi recolhido. Recolhido sai do mundo; revelado apenas acende.</summary>
+        public bool Collected;
+
+        /// <summary>Sobe o nivel da CIDADE — logo, uma carta para cada jogador.</summary>
+        public float Xp;
+        /// <summary>Pessoal de quem achou: reroll de draft.</summary>
+        public float Gold;
+
+        /// <summary>Identidade no mundo procedural, ou 0 se e um Esconderijo do dia, perto da vila.</summary>
+        public long WorldKey;
+        public bool FromWorld => WorldKey != 0L;
     }
 }

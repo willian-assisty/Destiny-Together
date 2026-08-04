@@ -34,6 +34,14 @@ namespace DestinyTogether.Sim
         public SimEventLog Events => _events;
         public TurnWaveSpec CurrentTurnWaves => _currentTurnWaves;
 
+        /// <summary>
+        /// Ticks fixos decorridos desde o inicio da partida. E o relogio comum de host e clientes:
+        /// quadro de movimento, lote de evento e reconciliacao de predicao sao todos carimbados com
+        /// ele. Tempo real nao serve para isso — dois relogios de parede nunca concordam; contagem
+        /// de tick concorda por definicao.
+        /// </summary>
+        public int Tick { get; private set; }
+
         public MatchSimulation(IContentDatabase content, int seed, int playerCount,
                                ILogSink log = null, DefId[] chosenHeroes = null)
         {
@@ -45,7 +53,7 @@ namespace DestinyTogether.Sim
             State = MatchFactory.Create(content, seed, playerCount, chosenHeroes);
             _playerCount = State.Players.Count;
             _currentTurnWaves = content.GetTurnWaves(State.TurnNumber, _playerCount);
-            EnterPhase(PhaseId.Preparo);
+            EnterPhase(PhaseId.Dia);
         }
 
         // ----------------------------------------------------------------------------------
@@ -140,7 +148,7 @@ namespace DestinyTogether.Sim
         /// </summary>
         private void ApplyReadyClamp()
         {
-            if (State.Phase != PhaseId.Preparo || _clampApplied) return;
+            if (State.Phase != PhaseId.Dia || _clampApplied) return;
 
             int connected = Math.Max(1, State.ConnectedPlayerCount());
             int readyThreshold = connected >= 4 ? 3 : Math.Max(1, connected - 1);
@@ -177,14 +185,14 @@ namespace DestinyTogether.Sim
         {
             if (State.IsOver) return;
 
+            Tick++;
             ApplyPendingCommands();
             State.PhaseElapsed += FixedDelta;
 
             switch (State.Phase)
             {
-                case PhaseId.Preparo: TickPreparo(); break;
-                case PhaseId.Assalto: TickAssalto(); break;
-                case PhaseId.Balanco: TickBalanco(); break;
+                case PhaseId.Dia: TickDia(); break;
+                case PhaseId.Noite: TickNoite(); break;
             }
         }
 
@@ -200,33 +208,28 @@ namespace DestinyTogether.Sim
 
             switch (phase)
             {
-                case PhaseId.Preparo:
-                    State.PhaseDuration = State.TurnNumber <= 3
-                        ? _content.Rules.PreparoFirstActSeconds
-                        : _content.Rules.PreparoMaxSeconds;
+                case PhaseId.Dia:
+                    State.PhaseDuration = _content.Rules.DiaSeconds;
                     _currentTurnWaves = _content.GetTurnWaves(State.TurnNumber, _playerCount);
                     MatchFactory.RepopulateHarvestNodes(State, _content, _spawnRng, _events);
+                    MatchFactory.RepopulateCaches(State, _content, _spawnRng, _events);
                     ResetHeroesToTownHall();
-                    for (int i = 0; i < State.Players.Count; i++) State.Players[i].IsReady = false;
+                    for (int i = 0; i < State.Players.Count; i++)
+                    {
+                        State.Players[i].IsReady = false;
+                        // O decaimento dos achados zera no amanhecer: cada dia tem os seus
+                        // primeiros Esconderijos, que sao os que valem.
+                        State.Players[i].CachesFoundToday = 0;
+                    }
                     break;
 
-                case PhaseId.Assalto:
-                    State.PhaseDuration = 0f; // duracao vem das Investidas
+                case PhaseId.Noite:
+                    State.PhaseDuration = _content.Rules.NoiteSeconds;
                     State.SurgeIndex = 0;
                     State.SurgeElapsed = 0f;
                     State.InBreather = false;
                     _events.Emit(SimEventType.SurgeStarted, EntityId.None, 0f, State.CityCenter,
                                  intValue: 0);
-                    break;
-
-                case PhaseId.Balanco:
-                    State.PhaseDuration = _content.Rules.BalancoSeconds;
-                    SpawnSystem.DissolveAll(State, _events);
-                    AbsorbCarriedLoot();
-                    BuildSystem.CollectTurnProduction(State, _content, _events);
-                    EconomySystem.ResolveLevelUps(State, _content, _events);
-                    EconomySystem.OfferDrafts(State, _content, _draftRng, _events);
-                    PlantGraves();
                     break;
 
                 case PhaseId.Fim:
@@ -238,32 +241,57 @@ namespace DestinyTogether.Sim
                          State.CityCenter, intValue: (int)phase);
         }
 
-        private void TickPreparo()
+        /// <summary>
+        /// O Dia. Nenhum inimigo no mapa: construir, colher, explorar a mata e escolher carta,
+        /// tudo simultaneo e tudo opcional. O combate fica ligado mesmo sem monstros porque o
+        /// auto-ataque tambem limpa nada — desligar so criaria um caminho de codigo a mais.
+        /// </summary>
+        private void TickDia()
         {
             HeroSystem.Tick(State, _content, FixedDelta, _events, combatEnabled: false);
+            WorldStreamer.Tick(State, _content, _events);
+            ExplorationSystem.Tick(State, _content, _events);
 
             int connected = Math.Max(1, State.ConnectedPlayerCount());
             bool everyoneReady = State.ReadyCount() >= connected;
             bool timeUp = State.PhaseElapsed >= State.PhaseDuration;
 
             if (everyoneReady || timeUp)
-                EnterPhase(PhaseId.Assalto);
+                EnterPhase(PhaseId.Noite);
         }
 
-        private void TickAssalto()
+        /// <summary>
+        /// A Noite. Dura exatamente <see cref="MatchRulesSpec.NoiteSeconds"/> — nunca acaba porque
+        /// a lista de Investidas acabou, o que era verdade no modelo anterior. As Investidas agora
+        /// preenchem a noite; se sobrarem, param no corte; se faltarem, o ultimo trecho e limpeza.
+        /// </summary>
+        private void TickNoite()
+        {
+            AdvanceSurges();
+
+            TowerSystem.Tick(State, _content, FixedDelta, _events);
+            MonsterSystem.Tick(State, _content, FixedDelta, _events);
+            HeroSystem.Tick(State, _content, FixedDelta, _events, combatEnabled: true);
+            // O mundo continua existindo de noite: quem ficou la fora continua achando coisa —
+            // e continua sendo cacado por isso.
+            WorldStreamer.Tick(State, _content, _events);
+            ExplorationSystem.Tick(State, _content, _events);
+
+            if (State.PhaseElapsed >= State.PhaseDuration)
+                BreakDawn();
+        }
+
+        /// <summary>
+        /// Toca a agenda de Investidas dentro da noite. Para de gerar antes do amanhecer para que
+        /// o ultimo minuto seja limpeza de campo, e nao uma onda que nasce so para ser dissolvida.
+        /// </summary>
+        private void AdvanceSurges()
         {
             var surges = _currentTurnWaves?.Surges;
-            if (surges == null || surges.Length == 0)
-            {
-                EnterPhase(PhaseId.Balanco);
-                return;
-            }
+            if (surges == null || surges.Length == 0 || State.SurgeIndex >= surges.Length) return;
 
-            if (State.SurgeIndex >= surges.Length)
-            {
-                EnterPhase(PhaseId.Balanco);
-                return;
-            }
+            float remaining = State.PhaseDuration - State.PhaseElapsed;
+            if (remaining <= _content.Rules.SpawnCutoffBeforeDawn) return;
 
             var surge = surges[State.SurgeIndex];
             float previous = State.SurgeElapsed;
@@ -280,38 +308,37 @@ namespace DestinyTogether.Sim
                     _events.Emit(SimEventType.BreatherStarted, EntityId.None, surge.BreatherSeconds,
                                  State.CityCenter, intValue: State.SurgeIndex);
                 }
+                return;
             }
-            else if (State.SurgeElapsed >= surge.BreatherSeconds)
-            {
-                State.InBreather = false;
-                State.SurgeElapsed = 0f;
-                State.SurgeIndex++;
 
-                if (State.SurgeIndex >= surges.Length)
-                {
-                    EnterPhase(PhaseId.Balanco);
-                    return;
-                }
+            if (State.SurgeElapsed < surge.BreatherSeconds) return;
 
+            State.InBreather = false;
+            State.SurgeElapsed = 0f;
+            State.SurgeIndex++;
+
+            if (State.SurgeIndex < surges.Length)
                 _events.Emit(SimEventType.SurgeStarted, EntityId.None, 0f, State.CityCenter,
                              intValue: State.SurgeIndex);
-            }
-
-            TowerSystem.Tick(State, _content, FixedDelta, _events);
-            MonsterSystem.Tick(State, _content, FixedDelta, _events);
-            HeroSystem.Tick(State, _content, FixedDelta, _events, combatEnabled: true);
         }
 
-        private void TickBalanco()
+        /// <summary>
+        /// O amanhecer. Resolve a noite inteira de uma vez e devolve o mapa ao jogador.
+        ///
+        /// Nao e uma fase: e um instante entre duas. O draft que ele oferece fica pendente e
+        /// pode ser escolhido a qualquer momento do Dia — nao existe mais uma tela de Balanco
+        /// que congela o mundo enquanto quatro pessoas leem tres cartas cada uma.
+        /// </summary>
+        private void BreakDawn()
         {
-            bool allResolved = true;
-            for (int i = 0; i < State.Players.Count; i++)
-                if (State.Players[i].PendingDraftPicks > 0) { allResolved = false; break; }
-
-            if (!allResolved && State.PhaseElapsed < State.PhaseDuration) return;
-
-            if (!allResolved)
-                EconomySystem.AutoResolvePendingDrafts(State, _content, _draftRng, _events);
+            // A luz dissolve o que sobrou. Ficcao e regra na mesma linha: o que nao foi morto
+            // ate o alvorecer recua, e o jogador ve isso acontecer.
+            SpawnSystem.DissolveAll(State, _events);
+            AbsorbCarriedLoot();
+            BuildSystem.CollectTurnProduction(State, _content, _events);
+            EconomySystem.ResolveLevelUps(State, _content, _events);
+            EconomySystem.OfferDrafts(State, _content, _draftRng, _events);
+            PlantGraves();
 
             if (State.TurnNumber >= _content.Rules.TotalTurns)
             {
@@ -325,7 +352,7 @@ namespace DestinyTogether.Sim
             for (int i = 0; i < State.Players.Count; i++) State.Players[i].TurnsSurvived++;
             _events.Emit(SimEventType.TurnStarted, EntityId.None, 0f, State.CityCenter,
                          intValue: State.TurnNumber);
-            EnterPhase(PhaseId.Preparo);
+            EnterPhase(PhaseId.Dia);
         }
 
         // ----------------------------------------------------------------------------------
@@ -400,7 +427,7 @@ namespace DestinyTogether.Sim
         {
             var surges = _currentTurnWaves?.Surges;
             if (surges == null || surges.Length == 0) return null;
-            int index = State.Phase == PhaseId.Preparo ? 0 : Math.Min(State.SurgeIndex, surges.Length - 1);
+            int index = State.Phase == PhaseId.Dia ? 0 : Math.Min(State.SurgeIndex, surges.Length - 1);
             return surges[index];
         }
 
@@ -457,25 +484,26 @@ namespace DestinyTogether.Sim
         {
             switch (State.Phase)
             {
-                case PhaseId.Preparo:
-                case PhaseId.Balanco:
+                case PhaseId.Dia:
                     State.PhaseElapsed = State.PhaseDuration + 1f;
                     break;
 
-                case PhaseId.Assalto:
+                case PhaseId.Noite:
                     SpawnSystem.DissolveAll(State, _events);
-                    EnterPhase(PhaseId.Balanco);
+                    BreakDawn();
                     break;
             }
         }
 
-        /// <summary>SO PARA TESTE: pula o turno inteiro, indo direto para o Preparo do proximo.</summary>
+        /// <summary>SO PARA TESTE: pula a noite inteira, indo direto para o Dia seguinte.</summary>
         public void DebugSkipTurn()
         {
-            if (State.Phase == PhaseId.Assalto) SpawnSystem.DissolveAll(State, _events);
-            if (State.Phase != PhaseId.Balanco) EnterPhase(PhaseId.Balanco);
+            if (State.Phase == PhaseId.Dia) EnterPhase(PhaseId.Noite);
+            if (State.Phase != PhaseId.Noite) return;
+
+            SpawnSystem.DissolveAll(State, _events);
             EconomySystem.AutoResolvePendingDrafts(State, _content, _draftRng, _events);
-            State.PhaseElapsed = State.PhaseDuration + 1f;
+            BreakDawn();
         }
 
         /// <summary>SO PARA TESTE: entrega uma carta aleatoria do pool ao jogador.</summary>

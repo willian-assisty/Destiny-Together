@@ -4,7 +4,25 @@ using UnityEngine;
 
 namespace DestinyTogether.Data
 {
-    public enum PrimitiveShape { Cube, Sphere, Capsule, Cylinder }
+    /// <summary>
+    /// O vocabulario de silhuetas. As quatro primeiras vem do motor; as tres ultimas sao geradas
+    /// por <c>ProceduralShapes</c>, porque quatro formas nao bastam para distinguir sete
+    /// comportamentos — e a alternativa (mesma forma, cor diferente) quebraria a regra de que
+    /// cor diz LADO e nunca funcao.
+    /// </summary>
+    public enum PrimitiveShape
+    {
+        Cube = 0,
+        Sphere = 1,
+        Capsule = 2,
+        Cylinder = 3,
+        /// <summary>Pontas nos seis sentidos: o cacador.</summary>
+        Octaedro = 4,
+        /// <summary>Marcador fincado no chao: o achado.</summary>
+        Cone = 5,
+        /// <summary>Massa e monumento: o Kaiju.</summary>
+        Piramide = 6
+    }
 
     public struct VisualStyle
     {
@@ -22,7 +40,8 @@ namespace DestinyTogether.Data
     /// por nao diferenciar seus inimigos visualmente. Entao a regra vem antes da arte:
     ///
     ///   SILHUETA diz o que a coisa FAZ:  esfera = enxame · capsula = explode · cubo = tanque
-    ///                                    cone/cilindro = ataca a distancia · esfera grande = gera
+    ///                                    cilindro = ataca a distancia · esfera grande = gera
+    ///                                    octaedro = CACA VOCE · piramide = Kaiju · cone = achado
     ///   COR diz de que LADO esta:        vermelho/laranja = ameaca · azul-verde = seu · cinza = neutro
     ///
     /// Quando a arte final chegar, ela herda esta gramatica. Se um monstro novo nao couber em
@@ -52,8 +71,12 @@ namespace DestinyTogether.Data
             Register(DefaultContent.Estourador, PrimitiveShape.Capsule, new Color(1.00f, 0.55f, 0.05f), 0.7f, 1.0f);
             Register(DefaultContent.Bruto, PrimitiveShape.Cube, new Color(0.30f, 0.30f, 0.33f), 1.15f, 1.3f);
             Register(DefaultContent.Cuspidor, PrimitiveShape.Cylinder, new Color(0.62f, 0.24f, 0.78f), 0.6f, 1.0f);
+            // Octaedro e a unica silhueta pontuda em todos os eixos — e a leitura de "vem atras
+            // de VOCE". Amarelo-acido para separa-lo do vermelho de horda: o Rondador nao e mais
+            // um da onda, e um problema pessoal.
+            Register(DefaultContent.Rondador, PrimitiveShape.Octaedro, new Color(0.95f, 0.85f, 0.15f), 0.62f, 0.9f);
             Register(DefaultContent.Ninho, PrimitiveShape.Sphere, new Color(0.09f, 0.06f, 0.12f), 1.5f, 1.5f);
-            Register(DefaultContent.MaeAranha, PrimitiveShape.Cube, new Color(0.05f, 0.03f, 0.07f), 2.6f, 2.2f);
+            Register(DefaultContent.MaeAranha, PrimitiveShape.Piramide, new Color(0.05f, 0.03f, 0.07f), 3.0f, 2.6f);
 
             // --- Herois: capsulas. Uma cor por jogador, fixa e nomeavel em voz alta. ---
             Register(DefaultContent.Guarda, PrimitiveShape.Capsule, new Color(0.25f, 0.55f, 0.95f), 0.75f, 1.5f);
@@ -69,6 +92,27 @@ namespace DestinyTogether.Data
             => _styles.TryGetValue(id, out var s)
                 ? s
                 : new VisualStyle { Shape = PrimitiveShape.Cube, Color = Color.magenta, Scale = 0.8f, Height = 0.8f };
+
+        /// <summary>
+        /// O Esconderijo revelado. Cone dourado que acende na mata — a unica coisa do jogo que
+        /// e desenhada para ser vista de longe e alcancada depois.
+        /// </summary>
+        public static VisualStyle CacheStyle(CacheKind kind)
+            => kind == CacheKind.Relicario
+                ? new VisualStyle
+                {
+                    Shape = PrimitiveShape.Cone,
+                    Color = new Color(1.00f, 0.86f, 0.35f),
+                    Scale = 0.85f,
+                    Height = 1.9f
+                }
+                : new VisualStyle
+                {
+                    Shape = PrimitiveShape.Cone,
+                    Color = new Color(0.85f, 0.68f, 0.32f),
+                    Scale = 0.6f,
+                    Height = 1.1f
+                };
 
         public static Color ResourceColor(HarvestNodeKind kind)
         {

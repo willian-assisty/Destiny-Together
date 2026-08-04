@@ -192,7 +192,7 @@ namespace DestinyTogether.Tests
             Give(def);
             var cell = FreeCellAdjacentToCity(_player);
 
-            _sim.State.Phase = PhaseId.Assalto;
+            _sim.State.Phase = PhaseId.Noite;
             var result = _sim.SubmitCommand(PlayerCommand.Build(_player.Id, def, cell));
 
             Assert.IsFalse(result.IsValid, "Erguer predio no meio do Assalto quebraria o prognostico");

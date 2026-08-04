@@ -75,6 +75,13 @@ namespace DestinyTogether.Sim
         public float ExplosionRadius = 0f;
         public float ExplosionDamage = 0f;
 
+        /// <summary>
+        /// Rondador: ignora predio e persegue o heroi mais proximo de QUALQUER distancia.
+        /// Os outros arquetipos so trocam de alvo se um heroi entrar no alcance de ataque —
+        /// este comeca cacando. E o que da preco a estar longe de casa quando a noite cai.
+        /// </summary>
+        public bool HuntsHeroes = false;
+
         /// <summary>Ninho: estatico e gera filhotes.</summary>
         public bool IsStationary = false;
         public DefId SpawnsMonster = default;
@@ -121,6 +128,16 @@ namespace DestinyTogether.Sim
         public float DelaySeconds;
         /// <summary>Ninho nasce fora do alcance das torres — forca expedicao humana.</summary>
         public bool SpawnOutsideTowerRange;
+
+        /// <summary>
+        /// Nasce em QUALQUER ponto do anel, nao no setor de uma Faixa.
+        ///
+        /// A Faixa continua existindo — ela e derivada do angulo do ponto sorteado, entao o
+        /// prognostico e o HUD seguem funcionando. O que muda e a leitura: em vez de oito jorros
+        /// nascendo em oito pontos, a noite vira um cerco continuo. Faixa passa a ser o nome de
+        /// um SETOR do cerco, que e como um time fala mesmo ("vaza no Norte").
+        /// </summary>
+        public bool AnyDirection;
     }
 
     /// <summary>Uma Investida completa (~25s), seguida de um Respiro.</summary>
@@ -157,19 +174,103 @@ namespace DestinyTogether.Sim
         /// </summary>
         public float CornerSpread = 7f;
 
-        public int TreeCount = 12;
-        public int RockCount = 8;
-        public int ChestCount = 4;
-        /// <summary>Cota FIXA por turno: ficar 5 min no Preparo nao rende 1 de madeira a mais que ficar 60s.</summary>
+        // A cota subiu ~70% junto com a mudanca de ritmo, e nao e generosidade: sao 5 dias no
+        // lugar de 9 turnos, entao a economia de uma partida inteira teria encolhido 44% ao
+        // mesmo tempo em que a exposicao ao combate subiu 40%. Sem este ajuste o time entra na
+        // noite 3 com a defesa que o modelo antigo tinha no turno 2.
+        public int TreeCount = 20;
+        public int RockCount = 14;
+        public int ChestCount = 7;
+        /// <summary>Cota FIXA por dia: ficar os 5 minutos inteiros nao rende 1 de madeira a mais
+        /// que sair em 60s. E o que permite o Dia ter relogio longo sem virar farm obrigatorio —
+        /// o tempo extra so vale para EXPLORAR, que e onde esta o retorno crescente.</summary>
         public float WoodPerTree = 15f;
         public float StonePerRock = 10f;
         public float GoldPerChest = 20f;
+
+        // --- Exploracao ---
+
+        /// <summary>Esconderijos escondidos na mata a cada amanhecer.</summary>
+        public int CacheCount = 14;
+        /// <summary>Fracao deles que e Relicario (o resto e Suprimento).</summary>
+        public float RelicFraction = 0.22f;
+
+        /// <summary>
+        /// Anel onde os Esconderijos nascem, medido do centro.
+        ///
+        /// Comeca em 27 porque os bolsoes de recurso ficam em ~23,6 (ver MatchFactory): com o
+        /// anel comecando em 22, quem so colhia tropecava nos Esconderijos de graca e explorar
+        /// valia exatamente 0% a mais — foi o que a medicao mostrou. O limite externo encosta no
+        /// anel de spawn de proposito: o achado mais valioso fica onde a horda nasce.
+        /// </summary>
+        public float CacheInnerRadius = 27f;
+        public float CacheOuterRadius = 35f;
+
+        /// <summary>Distancia em que o Esconderijo acende na tela.</summary>
+        public float CacheRevealRadius = 7f;
+        /// <summary>Distancia em que ele e recolhido ao passar por cima.</summary>
+        public float CachePickupRadius = 1.4f;
+
+        // Calibrado contra a colheita, nao no vacuo. Depositar rende XpPerResourceDeposited por
+        // unidade, e um dia inteiro de colheita rende algumas centenas de XP — se o Esconderijo
+        // valesse menos que isso por minuto investido, explorar seria uma armadilha educada, e a
+        // medicao mostrou exatamente isso (-6% de nivel de cidade para quem saia da rota).
+        // Explorar tambem CUSTA posicao: quem esta na mata quando escurece volta atrasado para a
+        // defesa. O premio tem de pagar o risco, nao so o tempo.
+        public float XpPerSupplyCache = 30f;
+        public float GoldPerSupplyCache = 8f;
+        /// <summary>Relicario vale ~4 Suprimentos. Achar um costuma valer um nivel de cidade.</summary>
+        public float XpPerRelicCache = 115f;
+        public float GoldPerRelicCache = 20f;
+
+        // --- O mundo procedural alem da vila ---
+
+        /// <summary>
+        /// Ate onde o heroi pode se afastar. Nao e um limite de design, e um limite de seguranca:
+        /// a 7 celulas/s levaria ~10 minutos correndo em linha reta para encostar nele, mais que
+        /// um ciclo inteiro. Existe para que nenhuma coordenada saia do razoavel.
+        /// </summary>
+        public float ExplorableRadius = 4000f;
+
+        /// <summary>Folga entre o anel de spawn e o inicio do mundo procedural, em celulas.</summary>
+        public float WorldClearance = 10f;
+
+        /// <summary>
+        /// Em quantas celulas a fronteira vai de "pobre" a "rica". Curto demais e o gradiente
+        /// vira degrau; longo demais e ninguem chega a sentir que valeu andar.
+        /// </summary>
+        public float WorldRichnessRange = 320f;
+
+        /// <summary>
+        /// Chance de um chunk ter Esconderijo, na borda do mundo procedural e bem longe.
+        ///
+        /// Baixo de proposito: um achado a cada ~15 chunks perto e a cada ~4 longe. Densidade alta
+        /// transforma a mata num tapete de itens e o jogador para de escolher para onde ir — ele
+        /// so anda. O que faz a distancia valer e o VALOR crescer, nao a quantidade.
+        /// </summary>
+        public float WorldCacheChanceNear = 0.07f;
+        public float WorldCacheChanceFar = 0.26f;
+
+        /// <summary>Raio, em chunks, em que a simulacao materializa o conteudo do mundo.</summary>
+        public int WorldStreamRadiusChunks = 4;
     }
 
     public sealed class MatchRulesSpec
     {
-        public int TotalTurns = 9;
-        public float TownHallMaxHealth = 600f;
+        /// <summary>
+        /// Noites ate a vitoria. Cinco, nao nove: com o ciclo de 5+5 minutos, nove turnos dariam
+        /// uma sessao de 90 minutos. Cinco noites cabem em ~35-50 min, que e a duracao em que a
+        /// partida ainda termina numa sentada — e o Dia encurta sozinho quando o time marca
+        /// Pronto, entao um grupo rapido fecha em bem menos.
+        /// </summary>
+        public int TotalTurns = 5;
+
+        /// <summary>
+        /// A cidade e a unica barra de vida, e agora ela fica exposta por 255s por noite contra
+        /// os ~100s de Assalto do modelo antigo. 900 preserva a sensacao de desgaste que 600
+        /// dava: mesma fracao de barra por minuto de pressao, num minuto que ficou mais longo.
+        /// </summary>
+        public float TownHallMaxHealth = 900f;
         /// <summary>Nenhum golpe unico tira mais que esta fracao do HP maximo. Anti-one-shot.</summary>
         public float MaxSingleHitFraction = 0.25f;
 
@@ -178,11 +279,22 @@ namespace DestinyTogether.Sim
         public float StartingStone = 0f;
         public float StartingGoldPerPlayer = 0f;
 
-        public float PreparoMaxSeconds = 75f;
-        public float PreparoFirstActSeconds = 60f;
-        /// <summary>Quando o TERCEIRO jogador aperta Pronto, o relogio trava neste teto.</summary>
-        public float PreparoClampOnThirdReady = 15f;
-        public float BalancoSeconds = 25f;
+        /// <summary>Duracao do Dia. Teto, nao piso: todos Prontos antecipa a noite.</summary>
+        public float DiaSeconds = 300f;
+        /// <summary>Duracao da Noite. Piso E teto — a noite acaba na hora, sempre.</summary>
+        public float NoiteSeconds = 300f;
+
+        /// <summary>
+        /// Quanto antes do amanhecer os monstros param de nascer.
+        ///
+        /// Sem isto, o alvorecer dissolveria uma horda inteira que acabou de entrar, e o jogador
+        /// aprenderia a simplesmente esperar. Com isto, o ultimo minuto e uma limpeza de campo
+        /// que o time ganha ou perde — e o que sobra ao amanhecer e residuo, nao a onda.
+        /// </summary>
+        public float SpawnCutoffBeforeDawn = 45f;
+
+        /// <summary>Quando o TERCEIRO jogador aperta Pronto, o relogio do Dia trava neste teto.</summary>
+        public float PreparoClampOnThirdReady = 20f;
 
         /// <summary>Curva de XP multiplicada pelo n de jogadores: agencia per capita identica a 1, 2, 3 ou 4.</summary>
         public float XpPerCityLevelBase = 38f;

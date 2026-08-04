@@ -33,10 +33,13 @@ namespace DestinyTogether.Sim
 
         public EntityId Hero;
 
-        /// <summary>Cartas na mao — cada uma vira um predio no Preparo. Custo de erguer e zero: o XP ja pagou.</summary>
+        /// <summary>Cartas na mao — cada uma vira um predio no Dia. Custo de erguer e zero: o XP ja pagou.</summary>
         public readonly List<DefId> Hand = new List<DefId>();
 
-        /// <summary>Opcoes do draft privado do Balanco. Nunca compartilhado entre jogadores.</summary>
+        /// <summary>
+        /// Opcoes do draft privado, oferecidas no amanhecer e escolhiveis a qualquer hora do Dia.
+        /// Nunca compartilhado entre jogadores.
+        /// </summary>
         public readonly List<DefId> DraftOptions = new List<DefId>();
         public bool DraftResolved;
         public int PendingDraftPicks;
@@ -45,5 +48,21 @@ namespace DestinyTogether.Sim
         public float MetersHarvested;
         public int Deposits;
         public int Repairs;
+        /// <summary>Esconderijos recolhidos. E o placar do explorador, ao lado do do construtor.</summary>
+        public int CachesFound;
+
+        /// <summary>
+        /// Recolhidos HOJE. Zera a cada amanhecer, e cada achado do dia vale menos que o anterior.
+        ///
+        /// E o unico limitador possivel num mundo que nao acaba: com campo infinito de recompensa,
+        /// qualquer valor fixo por achado faz o ganho crescer linearmente com o tempo gasto, e o
+        /// Dia vira farm — a exata armadilha que a cota fixa de colheita existe para evitar. A
+        /// medicao mostrou isso sem sutileza: 299 Esconderijos recolhidos num unico dia.
+        ///
+        /// O decaimento tambem torna o jogo mais cooperativo, e isso e o melhor dele: como os
+        /// primeiros achados de cada um valem mais, quatro pessoas espalhadas rendem mais que
+        /// quatro pessoas na mesma trilha.
+        /// </summary>
+        public int CachesFoundToday;
     }
 }

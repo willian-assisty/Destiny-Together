@@ -75,7 +75,13 @@ namespace DestinyTogether.EditorTools
         private const string GroundMat    = Forest + "Materials/grass01.mat";
         private static readonly Color DeadGrassTint = new Color(0.40f, 0.35f, 0.21f, 1f);
 
-        /// <summary>Cenário decorativo. Árvores mortas dominam — o clima é de cidade sitiada.</summary>
+        /// <summary>
+        /// A mata das quatro florestas. SÓ árvores — penhascos e barris entravam aqui antes e
+        /// poluíam a leitura: floresta tem que se ler como floresta à primeira olhada, senão
+        /// deixa de marcar "aqui se colhe" e vira ruído no campo de visão.
+        ///
+        /// Mortas dominam (o clima é de cidade sitiada), com pinheiros para quebrar a silhueta.
+        /// </summary>
         private static readonly string[] ScatterPaths =
         {
             City + "prefab_trees/dead_tree_b.prefab", City + "prefab_trees/dead_tree_c.prefab",
@@ -83,10 +89,21 @@ namespace DestinyTogether.EditorTools
             City + "prefab_trees/dead_tree_f.prefab", City + "prefab_trees/dead_tree_g.prefab",
             City + "prefab_trees/dead_tree_h.prefab", City + "prefab_trees/dead_tree_i.prefab",
             City + "prefab_trees/dead_tree_j.prefab",
-            City + "prefab_trees/pine_a.prefab",      City + "prefab_trees/pine_c.prefab",
-            City + "prefab_terrain/cliff_02.prefab",  City + "prefab_terrain/cliff_03.prefab",
-            City + "prefab_terrain/cliff_04.prefab",
-            City + "prefab_props/fence.prefab",       City + "prefab_props/barrel.prefab",
+            City + "prefab_trees/pine_a.prefab",      City + "prefab_trees/pine_b.prefab",
+            City + "prefab_trees/pine_c.prefab",      City + "prefab_trees/pine_d.prefab",
+        };
+
+        /// <summary>
+        /// As pedreiras do mundo procedural. Penhascos e afloramentos voltam AQUI — eles poluíam
+        /// a floresta quando estavam misturados na mesma lista, mas como bioma próprio fazem o
+        /// oposto: dão ao jogador um segundo tipo de lugar, reconhecível de longe, para onde ir.
+        /// </summary>
+        private static readonly string[] QuarryPaths =
+        {
+            City + "prefab_terrain/cliff_01.prefab", City + "prefab_terrain/cliff_02.prefab",
+            City + "prefab_terrain/cliff_03.prefab", City + "prefab_terrain/cliff_04.prefab",
+            City + "prefab_terrain/rock_01.prefab",  City + "prefab_terrain/rock_02.prefab",
+            City + "prefab_terrain/rock_03.prefab",
         };
 
         // ------------------------------------------------------------------------------
@@ -110,8 +127,10 @@ namespace DestinyTogether.EditorTools
         /// v2: tetos de altura por peça, normalização de escala do cenário, tint do chão.
         /// v3: mapa dobrado, Prefeitura vertical (igreja), chão de grama morta.
         /// v4: correção de eixo do pack (Z-up) — o pack inteiro entrava deitado.
+        /// v5: florestas concentradas nas quatro diagonais, miolo do mapa limpo.
+        /// v6: mundo procedural — lista de pedreiras e raio de streaming de cenario.
         /// </summary>
-        private const int CurrentSetupVersion = 4;
+        private const int CurrentSetupVersion = 6;
 
         private static void TrySetupOnce()
         {
@@ -199,12 +218,26 @@ namespace DestinyTogether.EditorTools
                 .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
                 .Where(g => g != null)
                 .ToList();
-            // O mapa dobrou de lado, entao a area quadruplicou: 160 mantem a mesma densidade de
-            // antes sem fechar o campo de visao — o jogador precisa VER a horda chegando.
-            visuals.ScatterCount = 160;
-            visuals.ScatterTargetCells = 1.6f;
-            visuals.ScatterMinScale = 0.7f;
-            visuals.ScatterMaxScale = 1.5f;
+            // 320 arvores divididas por quatro florestas = 80 cada. Densidade suficiente para
+            // ler como mata fechada; o miolo do mapa e as Faixas ortogonais continuam limpos.
+            visuals.ScatterCount = 320;
+            visuals.ForestRadius = 13f;
+            visuals.ForestDensityBias = 0.72f;
+            visuals.ForestClearing = 4f;
+            visuals.ScatterTargetCells = 2.2f;
+            visuals.ScatterMaxHeightCells = 5f;
+            // Pedreiras do mundo procedural. Ausente na pasta = cai para primitiva sozinho, e o
+            // mundo continua existindo — nunca ha um estado "meio migrado" em que a mata some.
+            visuals.QuarryProps = QuarryPaths
+                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                .Where(g => g != null)
+                .ToList();
+            visuals.QuarryTargetCells = 2.6f;
+            visuals.QuarryMaxHeightCells = 4f;
+            visuals.PropRadiusChunks = 5;
+
+            visuals.ScatterMinScale = 0.65f;
+            visuals.ScatterMaxScale = 1.6f;
 
             visuals.Invalidate();
             EditorUtility.SetDirty(visuals);
@@ -221,7 +254,8 @@ namespace DestinyTogether.EditorTools
             Debug.Log(ArtValidator.Validate(visuals));
 
             Debug.Log($"[Destiny Together] Arte aplicada: {mapped} pecas mapeadas, " +
-                      $"{visuals.ScatterProps.Count} props de cenario ({visuals.ScatterCount} instancias). " +
+                      $"{visuals.ScatterProps.Count} props de mata + {visuals.QuarryProps.Count} de pedreira " +
+                      $"({visuals.ScatterCount} instancias nas florestas da vila, mundo procedural sob demanda). " +
                       (missing.Count == 0
                           ? "Nada faltando."
                           : $"NAO encontrados ({missing.Count}) — seguem em primitiva:\n  " +

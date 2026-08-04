@@ -35,6 +35,21 @@ namespace DestinyTogether.Sim
         NodeHarvested,
         NodeDepleted,
 
+        /// <summary>Um no do mundo procedural entrou em cena. Cell nao se aplica; Position sim.</summary>
+        NodeAppeared,
+
+        /// <summary>Um heroi chegou perto o bastante: o Esconderijo acendeu na tela.</summary>
+        CacheRevealed,
+        /// <summary>Recolhido. Amount = XP, IntValue = CacheKind, Player = quem achou.</summary>
+        CacheCollected,
+        /// <summary>Revelado mas nao recolhido, e o chunk saiu de alcance. So apaga a view.</summary>
+        CacheHidden,
+
+        /// <summary>Um chunk do mundo procedural foi materializado. Cell carrega (cx, cz).</summary>
+        WorldChunkLoaded,
+        /// <summary>Um chunk saiu de alcance e foi desmaterializado. Cell carrega (cx, cz).</summary>
+        WorldChunkUnloaded,
+
         CityDamaged,
         CityLevelUp,
         SiloEmpty,

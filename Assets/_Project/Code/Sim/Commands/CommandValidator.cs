@@ -21,44 +21,49 @@ namespace DestinyTogether.Sim
                 case CommandType.BuildTower:
                     return ValidateBuild(state, content, player, cmd.Def, cmd.Cell);
 
+                // Reparar e a unica acao de construcao que sobrevive a noite: a cura tem de estar
+                // disponivel no momento em que o dano acontece, senao a Pedra viraria um recurso
+                // que so se gasta depois que ja nao importa.
                 case CommandType.Repair:
-                    if (state.Phase != PhaseId.Preparo && state.Phase != PhaseId.Assalto)
-                        return ValidationResult.Fail("So da para reparar no Preparo ou no Assalto");
                     if (state.Stone <= 0f) return ValidationResult.Fail("Sem pedra");
                     if (!state.Grid.IsCityTile(cmd.Cell)) return ValidationResult.Fail("Nao ha nada para reparar ai");
                     return ValidationResult.Ok;
 
                 case CommandType.ClearRubble:
-                    if (state.Phase != PhaseId.Preparo) return ValidationResult.Fail("So no Preparo");
+                    if (state.Phase != PhaseId.Dia) return ValidationResult.Fail("So durante o Dia");
                     if (state.Grid.Get(cmd.Cell) != CellState.Escombro) return ValidationResult.Fail("Nao ha Escombro ai");
                     return ValidationResult.Ok;
 
                 case CommandType.SetReady:
-                    if (state.Phase != PhaseId.Preparo) return ValidationResult.Fail("Pronto so vale no Preparo");
+                    if (state.Phase != PhaseId.Dia) return ValidationResult.Fail("Pronto so vale durante o Dia");
                     if (player.IsAutomaton) return ValidationResult.Fail("Automato nao decide");
                     return ValidationResult.Ok;
 
+                // O heroi anda de dia e de noite. Nao existe mais "mundo congelado": o amanhecer
+                // e um instante, nao uma tela.
                 case CommandType.MoveHero:
                 case CommandType.StartHarvest:
-                    if (state.Phase != PhaseId.Preparo && state.Phase != PhaseId.Assalto)
-                        return ValidationResult.Fail("Mundo congelado");
+                    if (state.Phase == PhaseId.Fim) return ValidationResult.Fail("Partida encerrada");
                     return ValidationResult.Ok;
 
                 case CommandType.DonateCard:
-                    if (state.Phase != PhaseId.Preparo) return ValidationResult.Fail("Doacao so no Preparo");
+                    if (state.Phase != PhaseId.Dia) return ValidationResult.Fail("Doacao so durante o Dia");
                     if (!player.Hand.Contains(cmd.Def)) return ValidationResult.Fail("Carta nao esta na sua mao");
                     if (state.GetPlayer(new PlayerId(cmd.IntValue)) == null) return ValidationResult.Fail("Destinatario invalido");
                     return ValidationResult.Ok;
 
+                // O draft e oferecido no amanhecer e resolvido a qualquer momento do Dia. Antes
+                // ele tinha uma fase so para si, que congelava o mundo enquanto quatro pessoas
+                // liam tres cartas cada — tempo morto que agora e tempo de jogo.
                 case CommandType.PickCard:
-                    if (state.Phase != PhaseId.Balanco) return ValidationResult.Fail("Draft so no Balanco");
+                    if (state.Phase != PhaseId.Dia) return ValidationResult.Fail("Draft so durante o Dia");
                     if (player.PendingDraftPicks <= 0) return ValidationResult.Fail("Nada para escolher");
                     if (cmd.IntValue < 0 || cmd.IntValue >= player.DraftOptions.Count)
                         return ValidationResult.Fail("Opcao inexistente");
                     return ValidationResult.Ok;
 
                 case CommandType.RerollDraft:
-                    if (state.Phase != PhaseId.Balanco) return ValidationResult.Fail("Draft so no Balanco");
+                    if (state.Phase != PhaseId.Dia) return ValidationResult.Fail("Draft so durante o Dia");
                     if (player.PendingDraftPicks <= 0) return ValidationResult.Fail("Nada para rerrolar");
                     if (player.Gold < content.Rules.DraftRerollCost) return ValidationResult.Fail("Ouro insuficiente");
                     return ValidationResult.Ok;
@@ -75,8 +80,11 @@ namespace DestinyTogether.Sim
         public static ValidationResult ValidateBuild(MatchState state, IContentDatabase content,
                                                      PlayerState player, DefId def, GridCoord cell)
         {
-            if (state.Phase != PhaseId.Preparo)
-                return ValidationResult.Fail("So da para erguer no Preparo");
+            // Construir e acao de DIA, e essa e a regra que da forma ao ciclo inteiro: a noite
+            // e jogada com a base que voce ergueu enquanto havia luz, nunca com a que voce
+            // improvisa quando ja esta apanhando.
+            if (state.Phase != PhaseId.Dia)
+                return ValidationResult.Fail("So da para erguer durante o Dia");
             if (player.IsAutomaton)
                 return ValidationResult.Fail("Automato nao constroi");
             if (!player.Hand.Contains(def))

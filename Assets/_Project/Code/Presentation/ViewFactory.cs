@@ -92,23 +92,46 @@ namespace DestinyTogether.Presentation
         }
 
         /// <summary>
-        /// Vegetação decorativa dos Arredores. Puramente cosmética: a simulação não sabe que
-        /// existe, e por isso pode ser desligada inteira sem mudar uma regra.
+        /// As quatro florestas dos cantos. Puramente cosmética: a simulação não sabe que existem,
+        /// e por isso podem ser desligadas inteiras sem mudar uma regra.
+        ///
+        /// Ficam nas DIAGONAIS (NE, SE, SO, NO), em cima dos bolsões de recurso, e isso é decisão
+        /// de leitura tanto quanto de cenário: as diagonais viram mata fechada — onde se colhe —
+        /// e as Faixas ortogonais (N, S, L, O) ficam abertas, que é por onde a horda vem. O
+        /// jogador enxerga o ataque chegando pelo corredor limpo em vez de procurá-lo entre
+        /// troncos. O miolo do mapa fica vazio de propósito: é campo de batalha, não paisagem.
         /// </summary>
-        public void ScatterProps(Vec2 center, float innerRadius, float outerRadius, int seed)
+        /// <param name="cornerDistance">Distância do centro até o coração de cada floresta.</param>
+        /// <param name="cityRadius">Meia-largura do tabuleiro: nada de vegetação dentro disso.</param>
+        public void ScatterProps(Vec2 center, float cornerDistance, float cityRadius, int seed)
         {
             if (_profile == null || _profile.ScatterCount <= 0 || _profile.ScatterProps.Count == 0) return;
 
-            var container = new GameObject("Cenario").transform;
+            var container = new GameObject("Florestas").transform;
             container.SetParent(_root, false);
 
             var rng = new Rng(seed);
+            float radius = Mathf.Max(1f, _profile.ForestRadius);
+            float bias = Mathf.Clamp(_profile.ForestDensityBias, 0.3f, 1.5f);
+            float clearing = Mathf.Max(0f, _profile.ForestClearing);
+
             for (int i = 0; i < _profile.ScatterCount; i++)
             {
                 var prefab = _profile.ScatterProps[rng.Range(0, _profile.ScatterProps.Count)];
                 if (prefab == null) continue;
 
-                var point = rng.PointInRing(center, innerRadius, outerRadius);
+                // Rodízio entre as quatro diagonais: 45, 135, 225, 315 graus.
+                float cornerAngle = 45f + 90f * (i % 4);
+                var forestCenter = center + Vec2.FromCompassDegrees(cornerAngle) * cornerDistance;
+
+                // Expoente < 0.5 adensa o miolo; 0.5 daria área uniforme. Mata fechada no coração
+                // e ralinha na borda lê como floresta de verdade, não como grade de árvores.
+                float t = Mathf.Pow(rng.Next01(), bias * 0.5f);
+                float angle = rng.Range(0f, 360f);
+                var point = forestCenter + Vec2.FromCompassDegrees(angle) * (radius * t);
+
+                // Nada de vegetação em cima da cidade nem no campo de tiro em volta dela.
+                if (Vec2.Distance(point, center) < cityRadius + clearing) continue;
 
                 // Um holder recebe posição e rotação; a arte fica dentro dele, normalizada.
                 // Sem este passo o prop entra em escala NATIVA — e prop de cenário de pack tem
@@ -124,6 +147,7 @@ namespace DestinyTogether.Presentation
                 VisualFitter.Fit(instance, new VisualEntry
                 {
                     TargetCells = target,
+                    MaxHeightCells = _profile.ScatterMaxHeightCells,
                     ScaleMultiplier = rng.Range(_profile.ScatterMinScale, _profile.ScatterMaxScale),
                     EulerAngles = _profile.ScatterEulerAngles
                 });

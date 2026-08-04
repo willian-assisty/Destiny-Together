@@ -23,6 +23,21 @@ namespace DestinyTogether.Sim
             return center + Vec2.FromCompassDegrees(DegreesOf(lane) + spread) * radius;
         }
 
+        /// <summary>
+        /// Ponto de spawn em QUALQUER angulo do anel — a noite nao respeita setor.
+        ///
+        /// A Faixa nao desaparece: ela e lida de volta do angulo por <see cref="LaneOf"/>, entao
+        /// prognostico, pilares e o aviso "vaza no Norte" continuam valendo. O que some e a fila
+        /// de oito bocas visiveis; o que entra e um cerco. Um ligeiro jitter de raio evita que
+        /// tudo apareca exatamente sobre a mesma circunferencia, que le como anel de brinquedo.
+        /// </summary>
+        public static Vec2 RingSpawnPoint(Vec2 center, float radius, Rng rng)
+        {
+            float angle = rng.Range(0f, 360f);
+            float r = radius * rng.Range(0.94f, 1.06f);
+            return center + Vec2.FromCompassDegrees(angle) * r;
+        }
+
         public static Lane LaneOf(Vec2 center, Vec2 point)
         {
             float deg = (point - center).CompassDegrees;

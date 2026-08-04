@@ -43,7 +43,16 @@ namespace DestinyTogether.Sim
 
                 // Heroi no alcance vira alvo preferencial. Para o Cuspidor (alcance 8) isso e o
                 // sistema anti-camping: quem tenta segurar a Linha parado leva dano e precisa sair.
-                var hero = FindHeroInRange(state, m.Position, spec.AttackRange);
+                //
+                // O Rondador nao espera o heroi entrar no alcance: ele caca de qualquer distancia.
+                // Sem isso, sair para explorar de madrugada seria apenas demorado — a punicao
+                // viria do relogio, e relogio nao assusta ninguem.
+                var hero = spec.HuntsHeroes
+                    ? FindNearestHero(state, m.Position)
+                    : FindHeroInRange(state, m.Position, spec.AttackRange);
+
+                // Sem heroi vivo no mapa o cacador volta a ser um monstro comum e vai na cidade,
+                // senao ele congelaria enquanto os quatro estivessem em Espectro.
                 Vec2 targetPos = hero != null ? hero.Position : ResolveTargetPosition(state, m);
                 float distance = Vec2.Distance(m.Position, targetPos);
 
@@ -127,6 +136,10 @@ namespace DestinyTogether.Sim
 
         private static Vec2 ResolveTargetPosition(MatchState state, MonsterState m)
             => m.TargetCell.IsValid ? m.TargetCell.Center : state.CityCenter;
+
+        /// <summary>Heroi ativo mais proximo, sem limite de distancia. Usado pelo Rondador.</summary>
+        private static HeroState FindNearestHero(MatchState state, Vec2 from)
+            => FindHeroInRange(state, from, float.MaxValue);
 
         private static HeroState FindHeroInRange(MatchState state, Vec2 from, float range)
         {

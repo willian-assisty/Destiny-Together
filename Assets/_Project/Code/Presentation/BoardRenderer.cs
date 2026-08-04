@@ -58,34 +58,82 @@ namespace DestinyTogether.Presentation
             Refresh();
         }
 
+        /// <summary>
+        /// Lado do chão, em unidades. Grande o bastante para nunca aparecer borda dentro do
+        /// alcance de visão, e barato porque é UM cubo — o chão não é streamado, ele ACOMPANHA.
+        /// </summary>
+        private const float GroundSize = 900f;
+
+        /// <summary>Uma repetição da textura a cada 4 unidades. Também é o passo do snap.</summary>
+        private const float GroundTextureUnits = 4f;
+
+        private Transform _ground;
+        private Renderer _groundRenderer;
+
         private void BuildGround(IContentDatabase content)
         {
-            float radius = content.Arena.OutskirtsRadius;
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
             ground.name = "Ground";
             Object.Destroy(ground.GetComponent<Collider>());
             ground.transform.SetParent(_root, false);
-            ground.transform.localScale = new Vector3(radius * 2.6f, 0.2f, radius * 2.6f);
+            ground.transform.localScale = new Vector3(GroundSize, 0.2f, GroundSize);
             ground.transform.position = GridToWorld.ToWorld(_grid.Center, -0.15f);
 
-            var groundRenderer = ground.GetComponent<Renderer>();
+            _ground = ground.transform;
+            _groundRenderer = ground.GetComponent<Renderer>();
+
+            if (_profile != null && _profile.GroundMaterial != null)
+                _groundRenderer.sharedMaterial = _profile.GroundMaterial;
+            else
+                _groundRenderer.sharedMaterial = _factory.GetMaterial(GroundColor);
+
+            ApplyGroundUv(_ground.position);
+        }
+
+        /// <summary>
+        /// Faz o chão seguir quem está olhando.
+        ///
+        /// O mundo não acaba, mas o chão é um cubo só. A alternativa — chão por chunk — custaria
+        /// centenas de objetos para desenhar uma superfície plana. Seguir custa uma atribuição de
+        /// transform por frame.
+        ///
+        /// A posição é travada em múltiplos do tamanho da textura e o offset de UV compensa o
+        /// deslocamento, então o terreno fica parado no mundo em vez de deslizar sob os pés — que
+        /// é o artefato clássico de chão que persegue a câmera.
+        /// </summary>
+        public void TickGround(Vec2 focus)
+        {
+            if (_ground == null) return;
+
+            float step = GroundTextureUnits;
+            float x = Mathf.Round(focus.X / step) * step;
+            float z = Mathf.Round(focus.Y / step) * step;
+
+            var target = GridToWorld.ToWorld(new Vec2(x, z), -0.15f);
+            if ((target - _ground.position).sqrMagnitude < 0.0001f) return;
+
+            _ground.position = target;
+            ApplyGroundUv(target);
+        }
+
+        private void ApplyGroundUv(Vector3 worldPosition)
+        {
+            if (_groundRenderer == null) return;
+
+            // Escurece e repete a textura por property block, sem editar o material do pack:
+            // esticada uma única vez pelo chão inteiro ela vira uma mancha lisa cor de areia, que
+            // foi parte do "não vejo nada além de uma pedra enorme".
+            float tiling = GroundSize / GroundTextureUnits;
+            float offsetX = worldPosition.x / GroundTextureUnits;
+            float offsetY = worldPosition.z / GroundTextureUnits;
+
+            _groundRenderer.GetPropertyBlock(_block);
             if (_profile != null && _profile.GroundMaterial != null)
             {
-                groundRenderer.sharedMaterial = _profile.GroundMaterial;
-
-                // Escurece e repete a textura por property block, sem editar o material do pack:
-                // esticada uma única vez por 47 unidades ela vira uma mancha lisa cor de areia,
-                // que foi parte do "não vejo nada além de uma pedra enorme".
-                float tiling = radius * 2.6f / 4f;
-                groundRenderer.GetPropertyBlock(_block);
                 _block.SetColor(ShaderIds.BaseColor, _profile.GroundTint);
-                _block.SetVector(ShaderIds.BaseMapST, new Vector4(tiling, tiling, 0f, 0f));
-                groundRenderer.SetPropertyBlock(_block);
+                _block.SetVector(ShaderIds.BaseMapST, new Vector4(tiling, tiling, offsetX, offsetY));
             }
-            else
-            {
-                groundRenderer.sharedMaterial = _factory.GetMaterial(GroundColor);
-            }
+            _groundRenderer.SetPropertyBlock(_block);
         }
 
         private void BuildTiles()

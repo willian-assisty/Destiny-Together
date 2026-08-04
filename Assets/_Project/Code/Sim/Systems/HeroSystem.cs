@@ -44,27 +44,12 @@ namespace DestinyTogether.Sim
             }
         }
 
+        /// <summary>
+        /// Delega a <see cref="HeroMotion"/>. O corpo mora la porque o cliente vai chamar a MESMA
+        /// funcao ao prever o proprio heroi — ver o comentario de HeroMotion.
+        /// </summary>
         private static void Move(MatchState state, HeroState hero, HeroSpec spec, float dt)
-        {
-            var input = hero.MoveInput;
-            if (input.SqrMagnitude > 1f) input = input.Normalized;
-
-            if (input.SqrMagnitude > MathUtil.Epsilon)
-            {
-                hero.Facing = input.Normalized;
-                hero.Position += input * (spec.MoveSpeed * dt);
-                ClampToWorld(state, hero);
-            }
-        }
-
-        private static void ClampToWorld(MatchState state, HeroState hero)
-        {
-            var center = state.CityCenter;
-            var offset = hero.Position - center;
-            float limit = state.Grid.Size * 0.5f + 20f;
-            if (offset.Magnitude > limit)
-                hero.Position = center + offset.Normalized * limit;
-        }
+            => HeroMotion.Step(state, hero, spec, hero.MoveInput, dt);
 
         /// <summary>Colheita automatica: o que estiver no raio e drenado sem input. Limpar e colher e o mesmo verbo.</summary>
         private static void Harvest(MatchState state, HeroState hero, HeroSpec spec, float dt, SimEventLog log)
@@ -96,6 +81,9 @@ namespace DestinyTogether.Sim
 
                 if (node.IsDepleted)
                 {
+                    // Nó do mundo procedural nao volta: o consumo e lembrado por chave, para que
+                    // sair da clareira e voltar nao ressuscite a madeira.
+                    state.MarkConsumed(node.WorldKey);
                     log.Emit(SimEventType.NodeDepleted, node.Id, 0f, node.Position);
                     state.RemoveNode(node);
                 }

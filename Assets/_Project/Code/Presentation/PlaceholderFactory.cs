@@ -67,24 +67,17 @@ namespace DestinyTogether.Presentation
 
         public GameObject CreatePrimitive(VisualStyle style)
         {
-            var type = style.Shape switch
-            {
-                PrimitiveShape.Sphere => PrimitiveType.Sphere,
-                PrimitiveShape.Capsule => PrimitiveType.Capsule,
-                PrimitiveShape.Cylinder => PrimitiveType.Cylinder,
-                _ => PrimitiveType.Cube
-            };
+            var go = ProceduralShapes.IsProcedural(style.Shape)
+                ? CreateProcedural(style.Shape)
+                : CreateEnginePrimitive(style.Shape);
 
-            var go = GameObject.CreatePrimitive(type);
             go.name = "Visual";
-
-            // Colliders sao ruido no placeholder: nada aqui usa fisica, a simulacao resolve tudo.
-            var collider = go.GetComponent<Collider>();
-            if (collider != null) Object.Destroy(collider);
 
             float w = style.Scale;
             float h = Mathf.Max(0.05f, style.Height);
-            // Capsula e cilindro do Unity ja tem 2 unidades de altura: metade para casar com o resto.
+            // Capsula e cilindro do Unity ja tem 2 unidades de altura: metade para casar com o
+            // resto. Os solidos procedurais nascem no cubo unitario justamente para nao precisarem
+            // de excecao aqui.
             float yScale = style.Shape is PrimitiveShape.Capsule or PrimitiveShape.Cylinder ? h * 0.5f : h;
             go.transform.localScale = new Vector3(w, yScale, w);
             go.transform.localPosition = new Vector3(0f, h * 0.5f, 0f);
@@ -93,11 +86,39 @@ namespace DestinyTogether.Presentation
             return go;
         }
 
+        private static GameObject CreateEnginePrimitive(PrimitiveShape shape)
+        {
+            var type = shape switch
+            {
+                PrimitiveShape.Sphere => PrimitiveType.Sphere,
+                PrimitiveShape.Capsule => PrimitiveType.Capsule,
+                PrimitiveShape.Cylinder => PrimitiveType.Cylinder,
+                _ => PrimitiveType.Cube
+            };
+
+            var go = GameObject.CreatePrimitive(type);
+
+            // Colliders sao ruido no placeholder: nada aqui usa fisica, a simulacao resolve tudo.
+            var collider = go.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+
+            return go;
+        }
+
+        private static GameObject CreateProcedural(PrimitiveShape shape)
+        {
+            var go = new GameObject();
+            go.AddComponent<MeshFilter>().sharedMesh = ProceduralShapes.Get(shape);
+            go.AddComponent<MeshRenderer>();
+            return go;
+        }
+
         public void Dispose()
         {
             foreach (var mat in _materials.Values)
                 if (mat != null) Object.Destroy(mat);
             _materials.Clear();
+            ProceduralShapes.Dispose();
         }
     }
 }

@@ -30,6 +30,7 @@ namespace DestinyTogether.Data
         public const string Estourador = "Estourador";
         public const string Bruto = "Bruto";
         public const string Cuspidor = "Cuspidor";
+        public const string Rondador = "Rondador";
         public const string Ninho = "Ninho";
         public const string MaeAranha = "MaeAranha";
 
@@ -190,6 +191,19 @@ namespace DestinyTogether.Data
                 // do de uma torre com Posto de Vigia ou numa Rua de 6+. Assim ele tem duas
                 // respostas — layout esperto ou o heroi indo la — em vez de ser impune as torres.
                 AttackRange = 6f, XpReward = 10f, BodyRadius = 0.4f
+            };
+
+            _monsters[Def(Rondador)] = new MonsterSpec
+            {
+                Id = Def(Rondador), DisplayName = "Rondador", Archetype = MonsterArchetype.Rondador,
+                // Rapido e fraco, e as duas coisas sao o mesmo argumento: ele PRECISA alcancar
+                // quem esta longe (velocidade 6.5 supera todos os herois menos o Arauto), mas
+                // nao pode ser uma sentenca — quem for pego e voltar correndo para as torres
+                // sobrevive, quem insistir em ficar na mata, nao. A resposta e recuar, e recuar
+                // e uma decisao; morrer sem resposta nao seria.
+                MaxHealth = 34f, Speed = 6.5f, HuntsHeroes = true,
+                ContactDamage = 9f, AttackInterval = 0.8f, AttackRange = 1f,
+                XpReward = 8f, GoldReward = 2f, BodyRadius = 0.35f
             };
 
             _monsters[Def(Ninho)] = new MonsterSpec

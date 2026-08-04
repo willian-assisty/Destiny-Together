@@ -30,6 +30,24 @@ namespace DestinyTogether.Core
             }
         }
 
+        /// <summary>
+        /// Le e restaura o estado interno.
+        ///
+        /// Existe para o arquivo de retomada: a semente sozinha nao basta, porque um gerador que ja
+        /// sacou 4000 numeros nao volta ao mesmo ponto so por ser resemeado. Sem isto, recarregar
+        /// uma partida do disco continuaria com outra sequencia de spawns e de draft — a mesma
+        /// partida deixaria de ser a mesma partida no exato momento em que mais importa.
+        /// </summary>
+        public void GetState(out uint x, out uint y, out uint z, out uint w)
+        {
+            x = _x; y = _y; z = _z; w = _w;
+        }
+
+        public void SetState(uint x, uint y, uint z, uint w)
+        {
+            _x = x; _y = y; _z = z; _w = w;
+        }
+
         /// <summary>Cria um gerador derivado, isolado por canal (spawn, draft, loot...).</summary>
         public static Rng ForChannel(int matchSeed, int channel, int round)
             => new Rng(unchecked(matchSeed * 73856093 ^ channel * 19349663 ^ round * 83492791));

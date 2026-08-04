@@ -174,19 +174,26 @@ namespace DestinyTogether.EditorTools
             var sim = new MatchSimulation(content, 12345, 4);
             for (int i = 0; i < sim.State.Players.Count; i++) sim.State.Players[i].IsAutomaton = true;
 
-            int steps = 0;
+            int diaTicks = 0, noiteTicks = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            while (!sim.State.IsOver && steps < 200000)
+            while (!sim.State.IsOver && sim.Tick < 200000)
             {
                 sim.StepFixed();
                 sim.Events.Clear();
-                steps++;
+                if (sim.State.Phase == PhaseId.Dia) diaTicks++;
+                else if (sim.State.Phase == PhaseId.Noite) noiteTicks++;
             }
             watch.Stop();
 
-            Debug.Log($"[Destiny Together] Partida headless: {sim.State.Outcome} no turno " +
-                      $"{sim.State.TurnNumber}, {steps} ticks ({steps * MatchSimulation.FixedDelta:0}s de jogo) " +
-                      $"em {watch.ElapsedMilliseconds}ms reais. HP final {sim.State.TownHallHealth:0}.");
+            // Mede ausencia de deadlock, nao balanceamento: os quatro assentos sao Automatos, e
+            // Automato colhe mas nunca constroi nem explora, entao a cidade cai cedo por desenho.
+            Debug.Log($"[Destiny Together] Partida headless: {sim.State.Outcome} na noite " +
+                      $"{sim.State.TurnNumber}/{content.Rules.TotalTurns}  ·  " +
+                      $"{diaTicks * MatchSimulation.FixedDelta:0}s de Dia + " +
+                      $"{noiteTicks * MatchSimulation.FixedDelta:0}s de Noite  ·  " +
+                      $"{sim.Tick} ticks em {watch.ElapsedMilliseconds}ms reais  ·  " +
+                      $"HP final {sim.State.TownHallHealth:0}.\n" +
+                      "Automatos nao constroem nem exploram — para balancear, use Tools/Headless/run.ps1.");
         }
 
         private static string NameOf(string displayName) => displayName.Replace(" ", "").Replace("-", "");

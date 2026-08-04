@@ -17,17 +17,24 @@ namespace DestinyTogether.Data
     [CreateAssetMenu(menuName = "Destiny Together/Atmosfera", fileName = "Atmosfera_")]
     public sealed class AtmosphereProfile : ScriptableObject
     {
-        [Header("Sol")]
+        // ------------------------------------------------------------------------------------
+        // Os campos abaixo descrevem a NOITE, que e o estado extremo e o que ja estava calibrado.
+        // O bloco "Dia" no fim descreve o outro extremo, e a apresentacao interpola entre os dois
+        // pela curva de DayNightCycle. Um asset, dois climas: e o que garante que o entardecer
+        // seja uma transicao continua em vez de um corte entre dois perfis.
+        // ------------------------------------------------------------------------------------
+
+        [Header("Sol (noite)")]
         public Color SunColor = new Color(0.62f, 0.68f, 0.85f);
         [Range(0f, 3f)] public float SunIntensity = 0.75f;
         public Vector3 SunAngles = new Vector3(38f, 26f, 0f);
         public bool SunShadows = true;
         [Range(0f, 1f)] public float ShadowStrength = 0.75f;
 
-        [Header("Luz ambiente")]
+        [Header("Luz ambiente (noite)")]
         public Color AmbientColor = new Color(0.16f, 0.18f, 0.26f);
 
-        [Header("Nevoa")]
+        [Header("Nevoa (noite)")]
         public bool FogEnabled = true;
         public Color FogColor = new Color(0.09f, 0.10f, 0.14f);
         public FogMode FogMode = FogMode.ExponentialSquared;
@@ -45,6 +52,30 @@ namespace DestinyTogether.Data
         public Color BackgroundColor = new Color(0.05f, 0.055f, 0.075f);
         [Tooltip("Usar o skybox como fundo da camera. Desligado = cor chapada, que reforca o clima fechado.")]
         public bool UseSkyboxAsBackground = false;
+
+        // ------------------------------------------------------------------------------------
+        // DIA
+        //
+        // O dia não é "a noite mais clara": é um clima diferente, e a diferença mais importante
+        // não é o brilho, é o ALCANCE DE VISÃO. Com névoa em 0,010 o horizonte abre para ~140
+        // unidades e a mata dos cantos fica visível do centro da cidade — o que transforma
+        // explorar numa escolha informada ("vou até aquele bosque") em vez de um passeio no
+        // escuro. À noite a névoa fecha em 0,045 e o mesmo bosque some, que é exatamente o que
+        // faz atravessá-lo custar coragem.
+        // ------------------------------------------------------------------------------------
+
+        [Header("Sol (dia)")]
+        public Color DaySunColor = new Color(1.00f, 0.96f, 0.86f);
+        [Range(0f, 3f)] public float DaySunIntensity = 1.35f;
+        [Range(0f, 1f)] public float DayShadowStrength = 0.55f;
+
+        [Header("Luz ambiente (dia)")]
+        public Color DayAmbientColor = new Color(0.52f, 0.55f, 0.60f);
+
+        [Header("Nevoa (dia)")]
+        public Color DayFogColor = new Color(0.72f, 0.74f, 0.70f);
+        [Range(0f, 0.2f)] public float DayFogDensity = 0.010f;
+        public Color DayBackgroundColor = new Color(0.66f, 0.71f, 0.76f);
 
         /// <summary>Clima padrão: crepúsculo frio e fechado. Usado quando não há asset.</summary>
         public static AtmosphereProfile CreateDefaultDark()

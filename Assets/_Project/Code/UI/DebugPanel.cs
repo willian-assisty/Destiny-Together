@@ -6,7 +6,7 @@ namespace DestinyTogether.UI
     /// <summary>
     /// Painel de teste (F1).
     ///
-    /// Uma partida completa dura ~30 minutos e o Kaiju so aparece no turno 9. Sem controle de
+    /// Uma partida completa dura ~40 minutos e o Kaiju so aparece na noite 5. Sem controle de
     /// velocidade e pulo de fase, ninguem calibra o Ato 3 — e conteudo que nao se testa e
     /// conteudo que nao existe. Some junto com o resto do placeholder.
     /// </summary>
@@ -55,7 +55,7 @@ namespace DestinyTogether.UI
             GUILayout.Label("<b>FLUXO</b>", s.Label);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Pular fase", s.Button, GUILayout.Height(26))) sim.DebugSkipPhase();
-            if (GUILayout.Button("Pular turno", s.Button, GUILayout.Height(26))) sim.DebugSkipTurn();
+            if (GUILayout.Button("Pular noite", s.Button, GUILayout.Height(26))) sim.DebugSkipTurn();
             GUILayout.EndHorizontal();
 
             GUILayout.Space(8);

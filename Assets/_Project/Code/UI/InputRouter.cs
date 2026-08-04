@@ -49,15 +49,20 @@ namespace DestinyTogether.UI
 
             switch (_sim.State.Phase)
             {
-                case PhaseId.Preparo:
+                case PhaseId.Dia:
+                    // Draft ANTES da selecao de carta: enquanto ha escolha pendente, as teclas
+                    // 1-3 pertencem ao draft. Sem essa precedencia, apertar 1 para escolher a
+                    // carta oferecida selecionaria a primeira carta da mao — e o jogador
+                    // aprenderia que o teclado mente.
+                    if (TickDraft(keyboard))
+                    {
+                        _board.HideHighlight();
+                        break;
+                    }
+
                     TickCardSelection(keyboard);
                     TickPlacement(mouse);
                     TickReady(keyboard);
-                    break;
-
-                case PhaseId.Balanco:
-                    TickDraft(keyboard);
-                    _board.HideHighlight();
                     break;
 
                 default:
@@ -161,16 +166,22 @@ namespace DestinyTogether.UI
             Send(PlayerCommand.Ready(_localPlayer, !player.IsReady));
         }
 
-        private void TickDraft(Keyboard keyboard)
+        /// <summary>
+        /// Escolha de carta. Devolve true enquanto houver draft pendente — o chamador usa isso
+        /// para saber que as teclas numericas estao ocupadas.
+        /// </summary>
+        private bool TickDraft(Keyboard keyboard)
         {
             var player = LocalPlayer;
-            if (player == null || player.PendingDraftPicks <= 0) return;
+            if (player == null || player.PendingDraftPicks <= 0) return false;
 
             if (keyboard.digit1Key.wasPressedThisFrame) Send(PlayerCommand.Pick(_localPlayer, 0));
             if (keyboard.digit2Key.wasPressedThisFrame) Send(PlayerCommand.Pick(_localPlayer, 1));
             if (keyboard.digit3Key.wasPressedThisFrame) Send(PlayerCommand.Pick(_localPlayer, 2));
             if (keyboard.qKey.wasPressedThisFrame)
                 Send(new PlayerCommand { Type = CommandType.RerollDraft, Player = _localPlayer });
+
+            return true;
         }
 
         private void Send(PlayerCommand cmd)

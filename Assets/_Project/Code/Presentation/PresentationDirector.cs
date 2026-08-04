@@ -27,6 +27,7 @@ namespace DestinyTogether.Presentation
         private readonly BoardRenderer _board;
         private readonly EffectPool _effects;
         private readonly Transform _root;
+        private readonly WorldPropStreamer _world;
 
         private readonly Dictionary<EntityId, EntityView> _viewsById = new Dictionary<EntityId, EntityView>();
         private readonly List<SimEvent> _drained = new List<SimEvent>(256);
@@ -51,10 +52,17 @@ namespace DestinyTogether.Presentation
 
             SpawnInitialViews();
 
-            _views.ScatterProps(sim.State.CityCenter,
-                                sim.State.Grid.Size * 0.5f + 3f,
-                                sim.Content.Arena.OutskirtsRadius + 6f,
-                                sim.State.MatchSeed);
+            // Mesma distância diagonal dos bolsões de recurso (ver MatchFactory): a floresta
+            // cresce EM CIMA de onde se colhe, então mata fechada e madeira são o mesmo lugar.
+            // Estas quatro florestas ficam DENTRO da zona limpa do mundo procedural, então as
+            // duas coisas se complementam em vez de brigar: mata autoral perto de casa, mata
+            // gerada da clareira para fora.
+            float cityRadius = sim.State.Grid.Size * 0.5f;
+            float cornerDistance = Mathf.Lerp(cityRadius + 3f, sim.Content.Arena.OutskirtsRadius, 0.45f);
+            _views.ScatterProps(sim.State.CityCenter, cornerDistance, cityRadius, sim.State.MatchSeed);
+
+            _world = new WorldPropStreamer(root, profile, _factory, sim.Content.Arena,
+                                           sim.State.CityCenter, sim.State.MatchSeed);
         }
 
         private void SpawnInitialViews()
@@ -70,12 +78,18 @@ namespace DestinyTogether.Presentation
         // Loop
         // ------------------------------------------------------------------------------
 
-        public void Tick(float deltaTime)
+        /// <param name="focus">
+        /// Onde o jogador está olhando, em células. É o que decide qual pedaço do mundo
+        /// procedural existe na cena e para onde o chão se move.
+        /// </param>
+        public void Tick(float deltaTime, Vec2 focus)
         {
             ConsumeEvents();
             SyncTransforms();
             _effects.Tick(deltaTime);
             _board.TickPillars(deltaTime);
+            _board.TickGround(focus);
+            _world.Tick(focus);
 
             if (_boardDirty)
             {
@@ -197,6 +211,52 @@ namespace DestinyTogether.Presentation
                     }
                     break;
 
+                // O mundo procedural materializa nós enquanto o herói anda. Chega como evento
+                // próprio em vez de reconciliação por frame: são milhares de nós ao longo de uma
+                // partida, e varrer a lista toda a 60 fps para descobrir o que mudou seria pagar
+                // caro por uma informação que a simulação já tem de graça.
+                case SimEventType.NodeAppeared:
+                {
+                    var appeared = _sim.State.GetNode(e.Entity);
+                    if (appeared != null) EnsureNodeView(appeared);
+                    break;
+                }
+
+                case SimEventType.CacheHidden:
+                    if (_viewsById.TryGetValue(e.Entity, out var hidden))
+                    {
+                        hidden.Despawn();
+                        _viewsById.Remove(e.Entity);
+                    }
+                    break;
+
+                // O Esconderijo so ganha view quando alguem chega perto. E isso — e nao uma flag
+                // de visibilidade — que o mantem escondido: o que nao existe na cena nao pode
+                // vazar por reflexo, por sombra nem por um shader distraido.
+                case SimEventType.CacheRevealed:
+                {
+                    var cache = _sim.State.GetCache(e.Entity);
+                    if (cache != null) EnsureCacheView(cache);
+                    _effects.Ring(GridToWorld.ToWorld(e.Position), 2.2f,
+                                  PlaceholderVisuals.CacheStyle((CacheKind)e.IntValue).Color, 0.5f);
+                    break;
+                }
+
+                case SimEventType.CacheCollected:
+                {
+                    if (_viewsById.TryGetValue(e.Entity, out var collected))
+                    {
+                        collected.Despawn();
+                        _viewsById.Remove(e.Entity);
+                    }
+                    // Relicario merece um anel maior: o retorno tem de ser legivel de longe para
+                    // quem esta do outro lado do mapa e vai decidir se tambem sai para explorar.
+                    bool relic = (CacheKind)e.IntValue == CacheKind.Relicario;
+                    _effects.Ring(GridToWorld.ToWorld(e.Position), relic ? 4.5f : 2.6f,
+                                  new Color(1f, 0.88f, 0.42f), relic ? 0.6f : 0.35f);
+                    break;
+                }
+
                 case SimEventType.CityDamaged:
                     _effects.Ring(GridToWorld.ToWorld(e.Position), 2.4f, new Color(0.95f, 0.2f, 0.2f), 0.25f);
                     break;
@@ -222,7 +282,8 @@ namespace DestinyTogether.Presentation
                 bool exists = _sim.State.GetMonster(id) != null
                               || _sim.State.GetTower(id) != null
                               || _sim.State.GetHero(id) != null
-                              || _sim.State.GetNode(id) != null;
+                              || _sim.State.GetNode(id) != null
+                              || _sim.State.GetCache(id) != null;
                 if (!exists) _toRemove.Add(id);
             }
 
@@ -318,6 +379,16 @@ namespace DestinyTogether.Presentation
             return Register(n.Id, view, pos);
         }
 
+        private EntityView EnsureCacheView(CacheState c)
+        {
+            if (_viewsById.TryGetValue(c.Id, out var existing)) return existing;
+
+            var pos = GridToWorld.ToWorld(c.Position);
+            var view = _views.CreateEntityView($"Esconderijo_{c.Kind}_{c.Id}", DefId.None,
+                                               PlaceholderVisuals.CacheStyle(c.Kind), pos);
+            return Register(c.Id, view, pos);
+        }
+
         private EntityView Register(EntityId id, EntityView view, Vector3 position)
         {
             view.Bind(id);
@@ -328,6 +399,7 @@ namespace DestinyTogether.Presentation
 
         public void Dispose()
         {
+            _world.Dispose();
             _effects.Dispose();
             _views.Dispose();
         }

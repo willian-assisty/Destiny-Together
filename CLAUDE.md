@@ -1,9 +1,17 @@
 # Destiny Together
 
 Tower-survivor cooperativo para até 4 jogadores. Uma cidade **estática** é a única barra de vida
-da partida; os monstros vêm **por turno**. Inspirado em *Monsters are Coming! Rock & Road*
-(Ludogram/Raw Fury, 2025), com três desvios deliberados: multiplayer, cidade parada e ondas
-discretas em vez de spawn contínuo.
+da partida, e o turno é um **ciclo de dia e noite** de 5 + 5 minutos: de dia o mapa é seguro e se
+constrói, colhe e **explora**; de noite a horda vem do anel inteiro. Inspirado em *Monsters are
+Coming! Rock & Road* (Ludogram/Raw Fury, 2025), com desvios deliberados: multiplayer, cidade
+parada, ondas discretas em vez de spawn contínuo, e um dia de verdade em vez de uma tela de
+preparo.
+
+**Cinco noites** é a vitória. O Dia tem relógio de 5 min mas é teto, não piso — todos Prontos
+antecipa a noite, então um time rápido fecha a partida em bem menos que os ~40 min nominais.
+
+Em volta da vila há um **mundo procedural sem fim**: florestas e pedreiras geradas por função
+pura da semente, exploráveis em todas as direções. Não há borda de mapa.
 
 Unity **6000.3.21f1** · URP · C# · PC primeiro.
 
@@ -22,19 +30,27 @@ Para iterar rápido sem passar pelo menu, marque **`Pular Menu`** no componente 
 |---|---|
 | `WASD` | move — o ataque sai na direção do movimento, sem mira |
 | `1`-`8` | seleciona carta da mão · clique ergue · botão direito cancela |
-| `R` | marca Pronto (ao terceiro Pronto o Preparo trava em 15s) |
+| `R` | marca Pronto — antecipa a noite (ao terceiro Pronto o Dia trava em 20s) |
+| `1`-`3` | escolhe a carta do draft quando há uma pendente · `Q` rerrola |
 | scroll | zoom |
 | `ESC` | pausa (continuar / reiniciar / menu) |
 | `F1` | painel de teste |
-| Balanço | `1`-`3` escolhe carta · `Q` rerrola |
 
-**Painel de teste (`F1`)** — velocidade 0,25× a 8×, pular fase, pular turno, injetar recursos e
-cartas, limpar a horda, curar a cidade. Existe porque uma partida dura ~30 min e o Kaiju só
-aparece no turno 9: sem isso, o Ato 3 nunca seria calibrado. Nada ali faz parte das regras.
+> Enquanto há draft pendente, `1`-`3` pertencem ao draft, não à mão. A precedência está em
+> `InputRouter`: sem ela, apertar `1` para pegar a carta oferecida selecionaria a primeira carta
+> da mão, e o jogador aprenderia que o teclado mente.
+
+**Painel de teste (`F1`)** — velocidade 0,25× a 8×, pular fase, pular noite, injetar recursos e
+cartas, limpar a horda, curar a cidade. Existe porque uma partida dura ~40 min e o Kaiju só
+aparece na noite 5: sem isso, o Ato final nunca seria calibrado. Nada ali faz parte das regras.
 
 **Menus do editor** (`Destiny Together`):
-- `Simular partida no console` — roda uma partida inteira headless em milissegundos.
+- `Simular partida no console` — roda uma partida headless em milissegundos. Mede **deadlock**,
+  não balanceamento: os assentos são Autômatos e Autômato não constrói nem explora.
 - `Gerar assets de conteudo padrao` — materializa os ScriptableObjects para balancear na mão.
+
+Para **balanceamento** use `.\Tools\Headless\run.ps1` — ele joga de verdade (constrói, drafta,
+colhe, explora, caça Ninho) e compara estratégias. Ver "Verificar sem abrir o Unity".
 
 > `activeInputHandler` está em **Both** (legado + Input System). O menu e o HUD são IMGUI, que
 > depende dos eventos legados; o gameplay usa o Input System novo. Trocar para "New only"
@@ -43,6 +59,16 @@ aparece no turno 9: sem isso, o Ato 3 nunca seria calibrado. Nada ali faz parte 
 ## Arquitetura
 
 Sete assemblies, com uma regra que sustenta todas as outras: **a simulação não conhece a engine.**
+
+**O mundo é uma fórmula, não um dado.** `WorldGen.Generate(semente, cx, cz)` é pura: entrar, sair
+e voltar reconstrói exatamente a mesma mata. Isso compra três coisas de uma vez — "quase
+infinito" sem mundo salvo, streaming barato (`WorldStreamer` materializa só o que está perto de
+um herói), e multiplayer sem trafegar um byte de terreno, porque os quatro clientes derivam a
+mesma floresta da mesma semente.
+
+O único estado persistente do mundo é `MatchState.ConsumedWorldItems`: um `long` por item já
+recolhido. Guardar o mundo seria impossível (ele não acaba) e desnecessário (ele é uma fórmula);
+guardar só o **desvio** em relação a ela cabe num HashSet.
 
 ```
 DT.Core          C# puro, sem UnityEngine    Vec2, GridCoord, Rng, EventBus
@@ -64,8 +90,17 @@ garantia de que trocar placeholder por arte final **não pode** quebrar regra de
 sincroniza com o estado por frame e interpola. Eventos são só o que *acontece* e não pode ser
 inferido: nasceu, morreu, atirou, explodiu.
 
-**Tick fixo de 20 Hz** (`MatchSimulation.FixedDelta`). O Assalto é tempo real, mas a simulação
+**Tick fixo de 20 Hz** (`MatchSimulation.FixedDelta`). A Noite é tempo real, mas a simulação
 avança em passos determinísticos — mesma seed + mesmos comandos = mesma partida.
+
+**Duas fases, não três.** `PhaseId` é `Dia` / `Noite` / `Fim`. O amanhecer não é fase: é um
+instante (`BreakDawn`) que dissolve o que sobrou, credita produção, resolve níveis e oferece o
+draft. O draft fica pendente e é escolhido a qualquer momento do Dia, com o mapa à vista — não
+existe mais uma tela que congela o mundo enquanto quatro pessoas leem três cartas cada.
+
+**A Noite acaba no relógio, sempre** — nunca porque a lista de Investidas terminou. Quem sai para
+explorar precisa saber quanto tempo tem. `Noite_DuraOTempoDasRegras_NaoOTempoDasInvestidas`
+protege isso.
 
 ## Convenções
 
@@ -75,7 +110,16 @@ avança em passos determinísticos — mesma seed + mesmos comandos = mesma part
   use o nosso precisa de `using EntityId = DestinyTogether.Sim.EntityId;`.
 - **Placeholder é sistema, não arte temporária.** `PlaceholderVisuals` define a gramática:
   silhueta diz o que a coisa **faz** (esfera = enxame, cápsula = explode, cubo = tanque,
-  cilindro = ataca à distância); cor diz de que **lado** está. A arte final herda essa gramática.
+  cilindro = ataca à distância, **octaedro = caça você**, **pirâmide = Kaiju**, **cone = achado**);
+  cor diz de que **lado** está. A arte final herda essa gramática.
+- **Formas além das do motor.** O Unity só traz cubo, esfera, cápsula e cilindro — quatro
+  silhuetas para sete comportamentos. `ProceduralShapes` gera octaedro, cone e pirâmide com
+  normais facetadas. A alternativa (mesma forma, cor diferente) quebraria a regra acima, porque
+  cor já está ocupada dizendo lado.
+- **Alcance do herói vem do conteúdo.** `MatchState.WorldRadius` = `OutskirtsRadius` + folga. Era
+  uma constante no integrador, e o resultado foi um mapa em que os Relicários nasciam fora do
+  alcance do herói — inalcançáveis, sem nenhum aviso.
+  `TodoEsconderijo_CabeDentroDoMundoAlcancavel` existe por causa disso.
 - **Views:** toda arte mora no filho `Visual`. Presenters chamam
   `IEntityView.PlayAction(ViewActionId, duração)`, nunca `Animator.Play("...")`.
 - **Arte real:** 1 célula = 1 unidade, pivot nos pés, +Z para a frente. `VisualFitter` normaliza
@@ -98,8 +142,30 @@ funciona. Quebrar qualquer uma exige mudar o teste correspondente primeiro.
    `ConstruirParaFora_EncurtaOCorredorDaFaixa` existe para que isso nunca se perca num refactor.
 4. **Quatro moedas ortogonais.** XP = cartas novas · Madeira = munição do Silo · Pedra = reparo ·
    Ouro = reroll. **Nada compra construção** — construir vem exclusivamente de subir de nível.
+   É por isso que um Relicário entrega XP e não uma carta: achar coisa na mata acelera o progresso
+   do time inteiro sem abrir uma segunda porta para construir.
 5. **Todo desbloqueio muda uma decisão, não um número.** Distritos dão regra (Queimadura, ignora
    armadura, não vira Escombro), nunca "+X%". Foi a crítica mais votada ao jogo de referência.
+6. **Explorar paga em progresso; colher paga em manutenção.** Esconderijo dá XP e Ouro; nó de
+   recurso dá Madeira e Pedra. Essa separação é o que dá ao Dia duas atividades em vez de duas
+   fontes do mesmo recurso — e como XP sobe o nível da **cidade**, o achado de um vira carta para
+   os quatro. `Esconderijo_PagaEmProgresso_NuncaEmManutencao` protege a fronteira.
+
+   O motivo mecânico é o teto de carga: um herói carrega o mesmo tanto perto ou longe, então
+   **distância nunca pode pagar em recurso carregável** — seria matematicamente pior que colher
+   no quintal, por mais bonita que fosse a floresta. XP e Ouro creditam na hora, sem viagem de
+   volta: são a única moeda em que distância pode pagar.
+7. **O Dia é seguro, a Noite não.** Nenhum monstro nasce de dia — é essa garantia que torna sair
+   do mapa uma decisão em vez de uma aposta. `Noite_GeraMonstros_EODiaNao` falha se alguém
+   quebrar isso.
+8. **Nada perto de casa rende com o tempo; nada longe rende duas vezes.** A cota de colheita é
+   fixa por dia (ficar parado não rende); o mundo procedural é de uso único (bosque exaurido
+   continua exaurido); e cada Esconderijo do dia vale menos que o anterior, por jogador,
+   zerando no amanhecer. As três regras defendem a mesma coisa: **campo infinito de recompensa
+   com valor fixo faz o ganho crescer linearmente com o tempo, e o Dia vira farm.** A medição
+   mostrou isso sem sutileza — 299 Esconderijos recolhidos num único dia antes do decaimento.
+   Efeito colateral que virou o melhor da regra: como os primeiros achados de cada um valem
+   mais, quatro pessoas espalhadas rendem mais que quatro na mesma trilha.
 
 ## Arte
 
@@ -122,10 +188,34 @@ primitiva sozinha — nunca existe um estado "meio migrado" em que o jogo não a
 `UrpMaterialUpgrader` converte para `URP/Lit` preservando cor, albedo, normal e emissão. Ele
 **altera os .mat dos packs** — reimportar o `.unitypackage` desfaz.
 
-**Atmosfera.** `Atmosfera_Nebuloso.asset` controla sol, névoa, ambiente e fundo. A névoa não é
-enfeite: horizonte fechado é o que faz um monstro *aparecer* vindo do escuro, o mesmo papel da
-névoa negra no jogo de referência. `FogDensity` acima de ~0.05 começa a apagar os pilares de
+**Atmosfera.** `Atmosfera_Nebuloso.asset` guarda **dois climas num asset só**: os campos sem
+prefixo descrevem a NOITE, os prefixados com `Day` descrevem o DIA, e `AtmosphereApplier`
+interpola entre eles por frame usando a curva de `DayNightCycle`. Um asset em vez de dois porque o
+entardecer precisa ser contínuo — dois perfis produziriam um corte.
+
+A diferença que mais importa entre dia e noite não é o brilho, é o **alcance de visão**: névoa em
+0.010 abre o horizonte para ~140 unidades e a mata dos cantos fica visível do centro da cidade, o
+que transforma explorar numa escolha informada; em 0.045 o mesmo bosque some, e é isso que faz
+atravessá-lo custar coragem. `FogDensity` noturna acima de ~0.05 começa a apagar os pilares de
 Faixa, que são a telegrafia da ameaça — clima que esconde informação de jogo sai caro.
+
+**O céu é HUD.** O clarear do amanhecer começa exatamente quando os monstros param de nascer
+(`SpawnCutoffBeforeDawn`), e o sol desce ao longo do entardecer. Isso é deliberado: "última onda
+já entrou" e "está clareando" são a mesma informação, dita uma vez só, sem ocupar tela.
+
+**O mundo procedural.** `WorldPropStreamer` desenha florestas e pedreiras em volta de quem está
+olhando e apaga o que ficou para trás, chamando `WorldGen` direto — sem passar pela simulação. Os
+dois streamers têm raios diferentes de propósito: a simulação materializa o que dá para **tocar**
+(`WorldStreamRadiusChunks`, 4 chunks), a tela o que dá para **ver** (`PropRadiusChunks`, 5).
+
+Sem os packs de arte a mata continua existindo, em primitivas com a mesma gramática de silhueta —
+cone escuro é pinheiro, octaedro cinza é rocha. Nunca há um estado "meio migrado" em que a
+floresta simplesmente não aparece.
+
+**O chão segue.** É UM cubo de 900 unidades que acompanha o foco, travado em múltiplos do tamanho
+da textura, com o offset de UV compensando o deslocamento — senão o terreno desliza sob os pés, que
+é o artefato clássico de chão que persegue a câmera. Chão por chunk custaria centenas de objetos
+para desenhar uma superfície plana.
 
 **Escala.** `VisualFitter` mede os bounds reais e normaliza para `TargetCells`, base no chão,
 centro em XZ. É por isso que packs em escalas diferentes convivem sem ninguém tocar em import
@@ -138,13 +228,42 @@ de FBX — e por isso trocar de pack depois é barato.
 
 ## Estado atual
 
-Jogável solo com placeholders: 9 turnos, 3 fases por turno, 10 prédios, 5 arquétipos de monstro +
-kaiju, 4 classes de herói, Ruas, Distritos, draft, Escombros, Túmulos, Urnas.
+Jogável solo com placeholders: 5 noites, ciclo Dia/Noite de 5+5 min, **mundo procedural sem fim**,
+10 prédios, 6 arquétipos de monstro + kaiju, 4 classes de herói, Esconderijos da mata, Ruas,
+Distritos, draft, Escombros, Túmulos, Urnas.
 
-**Multiplayer ainda não existe.** A simulação já é servidor-autoritativa por construção
-(comandos sobem, eventos descem, host resolve) — ligar o netcode é trocar o roteamento de
-`PlayerCommand` por RPC, sem tocar em simulação, apresentação ou UI. Assentos sem humano viram
-Autômatos, que colhem e depositam mas nunca constroem nem escolhem carta.
+**Balanceamento medido** (`.\Tools\Headless\run.ps1`, 8 seeds, jogo competente):
+
+| | noite alcançada de 5 | nível de cidade |
+|---|---:|---:|
+| 1 jogador | 1,8 | 4,8 |
+| 2 jogadores | 2,5 | 7,1 |
+| 4 jogadores | **4,5** | 10,3 |
+| 4 jogadores, sem explorar | 4,4 | 9,0 |
+
+Explorar vale **+14% de nível de cidade** — o número existe para provar que o sistema de
+Esconderijos muda uma decisão em vez de decorar o mapa. Ele já esteve em 0% duas vezes (os
+Esconderijos nasciam onde já se colhia; depois nasciam fora do alcance de movimento do herói) e em
+excesso uma vez, quando o mundo infinito fez os batedores recolherem 299 num dia. Refaça a medição
+a cada mudança em `WaveBuilder`, nos raios de conteúdo, no relógio ou na densidade do mundo.
+
+Solo continua duro por desenho (mesma proporção do modelo anterior): o jogo é co-op primeiro.
+
+**Multiplayer ainda não existe** — mas está projetado e medido em `Docs/Netcode.md`, com as
+versões de pacote verificadas contra documentação oficial. Nenhum pacote de rede está instalado, e
+isso é intencional: o Bloco A inteiro do plano roda sem instalar nada.
+
+Três decisões desse documento que restringem código daqui em diante:
+
+- **O cliente não simula.** O host é a única fonte de posição. Lockstep foi rejeitado porque
+  `MesmaSeed_ProduzMesmaPartida` prova determinismo em um runtime, não entre IL2CPP e Mono.
+- **`HeroMotion.Step` é a única cópia do integrador de movimento.** Host e predição do cliente
+  chamam a mesma função; duas cópias divergem por construção.
+- **`sim.Events` tem um dreno só.** Hoje é a apresentação; quando o host existir, será dele, e a
+  apresentação passa a ler o espelho — inclusive offline. `DrainInto` esvazia, então dois drenos
+  significam que um dos dois vê zero eventos, sem erro e sem log.
+
+Assentos sem humano viram Autômatos, que colhem e depositam mas nunca constroem nem escolhem carta.
 
 Ver `Docs/GDD.md` para o design completo e o roadmap.
 
@@ -162,3 +281,32 @@ $files  = Get-ChildItem Assets\_Project\Code\Core, Assets\_Project\Code\Sim -Rec
 ```
 
 Para as camadas de engine, acrescente `-r:` de cada DLL em `Editor\Data\Managed\UnityEngine\`.
+
+**E dá para rodar, não só compilar.** O Unity traz um runtime .NET 6 junto (`--list-runtimes`
+confirma; não há SDK, e não precisa). Trocando `-target:library` por `-target:exe` e escrevendo um
+`runtimeconfig.json` de três linhas ao lado do `.dll`, uma partida headless roda em ~300 ms:
+
+```powershell
+'{ "runtimeOptions": { "tfm": "net6.0", "framework":
+   { "name": "Microsoft.NETCore.App", "version": "6.0.0" } } }' | Out-File -Encoding utf8 DT.Headless.runtimeconfig.json
+& $dotnet DT.Headless.dll
+```
+
+`Data/DefaultContent.cs` e `Data/WaveBuilder.cs` também são livres de engine, então o conteúdo
+inteiro entra na compilação — o resto de `DT.Data` é ScriptableObject e fica de fora.
+
+Isso tudo está empacotado em **`.\Tools\Headless\run.ps1`** (~4 s, sem instalar nada):
+
+```powershell
+.\Tools\Headless\run.ps1            # 8 seeds por configuração
+.\Tools\Headless\run.ps1 -Seeds 24  # mais amostras
+```
+
+Ele roda três coisas: as **verificações** (integrador do herói, estado do PRNG, contador de tick,
+alcançabilidade do conteúdo, ortogonalidade das moedas), a **medição de balanceamento** por número
+de jogadores e estratégia, e um **traço fase a fase** de uma partida mostrando para onde vão HP,
+madeira e pedra.
+
+O traço é a ferramenta mais útil das três. Foi ele que mostrou que o time chegava a nível 8 de
+cidade com 25 prédios — cinquenta cartas viraram altura num núcleo denso enquanto o perímetro
+seguia descoberto. Média não revela isso; traço revela.

@@ -1,4 +1,5 @@
 using System.Text;
+using DestinyTogether.Core;
 using DestinyTogether.Data;
 using DestinyTogether.Sim;
 using UnityEngine;
@@ -26,10 +27,53 @@ namespace DestinyTogether.UI
 
             switch (sim.State.Phase)
             {
-                case PhaseId.Preparo: DrawPreparo(s, sim, input); break;
-                case PhaseId.Assalto: DrawAssalto(s, sim); break;
-                case PhaseId.Balanco: DrawBalanco(s, sim, input); break;
+                case PhaseId.Dia: DrawDia(s, sim, input); break;
+                case PhaseId.Noite: DrawNoite(s, sim); break;
             }
+
+            DrawExpedition(s, sim, input);
+        }
+
+        /// <summary>
+        /// A bussola do explorador: a que distancia da vila voce esta e se da tempo de voltar.
+        ///
+        /// Com o mundo procedural nao existe mais borda de mapa dizendo "voce foi longe demais",
+        /// e o jogador precisa de ALGUM jeito de responder a unica pergunta que importa la fora —
+        /// "consigo estar em casa quando escurecer?". Sem isto, ir longe vira aposta cega, que e
+        /// exatamente o que o Dia seguro existe para evitar.
+        ///
+        /// So aparece quando voce ja saiu da area da vila: perto de casa e ruido.
+        /// </summary>
+        private void DrawExpedition(UiStyles s, MatchSimulation sim, InputRouter input)
+        {
+            var player = input?.LocalPlayer;
+            var hero = player != null ? sim.State.GetHero(player.Hero) : null;
+            if (hero == null) return;
+
+            float distance = Vec2.Distance(hero.Position, sim.State.CityCenter);
+            float home = sim.Content.Arena.OutskirtsRadius;
+            if (distance < home) return;
+
+            var spec = sim.Content.GetHero(hero.Def);
+            float speed = spec != null && spec.MoveSpeed > 0.01f ? spec.MoveSpeed : 6f;
+            float travel = distance / speed;
+            float remaining = sim.SecondsRemainingInPhase();
+
+            bool day = sim.State.Phase == PhaseId.Dia;
+            // Margem de 20%: o caminho de volta nunca e uma reta limpa.
+            bool canReturn = !day || travel * 1.2f <= remaining;
+
+            GUILayout.BeginArea(new Rect(Screen.width * 0.5f - 190f, Screen.height - 210f, 380f, 62f), s.Panel);
+
+            string tint = canReturn ? "#9fd6a0" : "#ff8a5c";
+            GUILayout.Label($"<b>EXPEDICAO</b>   {distance - home:0} celulas alem dos Arredores", s.Mono);
+            GUILayout.Label(day
+                    ? $"volta em <color={tint}><b>{Clock(travel)}</b></color>   ·   " +
+                      (canReturn ? "da tempo" : "<color=#ff8a5c><b>a noite te pega no caminho</b></color>")
+                    : $"<color=#ff8a5c><b>voce esta fora na noite</b></color>   ·   volta em <b>{Clock(travel)}</b>",
+                s.Small);
+
+            GUILayout.EndArea();
         }
 
         // ------------------------------------------------------------------------------
@@ -37,10 +81,22 @@ namespace DestinyTogether.UI
         private void DrawStatusBar(UiStyles s, MatchSimulation sim)
         {
             var st = sim.State;
-            GUILayout.BeginArea(new Rect(12, 12, 480, 126), s.Panel);
+            GUILayout.BeginArea(new Rect(12, 12, 520, 148), s.Panel);
 
-            GUILayout.Label($"<b>Turno {st.TurnNumber}/{sim.Content.Rules.TotalTurns}</b>  ·  " +
+            GUILayout.Label($"<b>Noite {st.TurnNumber}/{sim.Content.Rules.TotalTurns}</b>  ·  " +
                             $"{PhaseName(st.Phase)}  ·  <i>{sim.CurrentTurnWaves?.Label}</i>", s.Title);
+
+            // O relogio do ciclo. Barra que esvazia e a leitura mais direta de "quanto falta",
+            // e o rotulo diz o que vem DEPOIS — porque a pergunta do jogador nunca e "quanto
+            // tempo de dia?", e sim "da tempo de ir ate ali e voltar antes de escurecer?".
+            float remaining = sim.SecondsRemainingInPhase();
+            float left = st.PhaseDuration > 0.01f ? remaining / st.PhaseDuration : 0f;
+            bool day = st.Phase == PhaseId.Dia;
+            string cycleColor = day ? "#ffd479" : "#7f9fd6";
+            string next = day ? "ate anoitecer" : "ate amanhecer";
+
+            GUILayout.Label($"<color={cycleColor}><b>{(day ? "SOL" : "LUA")}</b></color>  {Bar(left, 22)}  " +
+                            $"<b>{Clock(remaining)}</b> {next}", s.Mono);
 
             float hp = st.TownHallMaxHealth > 0f ? st.TownHallHealth / st.TownHallMaxHealth : 0f;
             GUILayout.Label($"Prefeitura  {Bar(hp, 22)}  <b>{st.TownHallHealth:0}</b>/{st.TownHallMaxHealth:0}", s.Mono);
@@ -61,8 +117,8 @@ namespace DestinyTogether.UI
 
             GUILayout.BeginArea(new Rect(Screen.width - 280, 12, 268, 232), s.Panel);
             GUILayout.Label("<b>BUSSOLA DE AMEACA</b>", s.Title);
-            GUILayout.Label(sim.State.Phase == PhaseId.Preparo
-                ? "Proxima Investida — tudo revelado"
+            GUILayout.Label(sim.State.Phase == PhaseId.Dia
+                ? "A noite que vem — tudo revelado"
                 : $"Investida {sim.State.SurgeIndex + 1}", s.Small);
             GUILayout.Space(4);
 
@@ -85,7 +141,7 @@ namespace DestinyTogether.UI
             GUILayout.EndArea();
         }
 
-        private void DrawPreparo(UiStyles s, MatchSimulation sim, InputRouter input)
+        private void DrawDia(UiStyles s, MatchSimulation sim, InputRouter input)
         {
             var player = input?.LocalPlayer;
             if (player == null) return;
@@ -93,6 +149,7 @@ namespace DestinyTogether.UI
             DrawHand(s, sim, input, player);
             DrawPlacementImpact(s, sim, input, player);
             DrawReadyPanel(s, sim, player);
+            DrawDraft(s, sim, player);
         }
 
         private void DrawHand(UiStyles s, MatchSimulation sim, InputRouter input, PlayerState player)
@@ -103,7 +160,8 @@ namespace DestinyTogether.UI
 
             if (player.Hand.Count == 0)
             {
-                GUILayout.Label("<i>Sem cartas. Elas chegam quando a cidade sobe de nivel, no Balanco.</i>", s.Label);
+                GUILayout.Label("<i>Sem cartas. Elas chegam quando a cidade sobe de nivel — " +
+                                "depositar recurso e achar Esconderijo sao as duas fontes de XP.</i>", s.Label);
             }
             else
             {
@@ -176,71 +234,70 @@ namespace DestinyTogether.UI
 
         private void DrawReadyPanel(UiStyles s, MatchSimulation sim, PlayerState player)
         {
-            GUILayout.BeginArea(new Rect(Screen.width - 280, 252, 268, 136), s.Panel);
-            GUILayout.Label($"<b>PREPARO</b>  {sim.SecondsRemainingInPhase():0}s", s.Title);
+            GUILayout.BeginArea(new Rect(Screen.width - 280, 252, 268, 152), s.Panel);
+            GUILayout.Label($"<b>DIA</b>  {Clock(sim.SecondsRemainingInPhase())}", s.Title);
 
             for (int i = 0; i < sim.State.Players.Count; i++)
             {
                 var p = sim.State.Players[i];
                 string hex = ColorUtility.ToHtmlStringRGB(PlaceholderVisuals.PlayerColor(p.Id.Index));
-                string mark = p.IsAutomaton ? "<i>automato</i>" : (p.IsReady ? "<b>PRONTO</b>" : "planejando");
+                string mark = p.IsAutomaton ? "<i>automato</i>" : (p.IsReady ? "<b>PRONTO</b>" : "no mapa");
                 GUILayout.Label($"<color=#{hex}>■</color> {p.DisplayName} — {mark}", s.Label);
             }
 
             GUILayout.Space(4);
-            GUILayout.Label(player.IsReady ? "<b>[R]</b> cancelar Pronto" : "<b>[R]</b> marcar Pronto", s.Label);
+            GUILayout.Label(player.IsReady ? "<b>[R]</b> cancelar Pronto" : "<b>[R]</b> Pronto — antecipa a noite", s.Label);
             GUILayout.EndArea();
         }
 
-        private void DrawAssalto(UiStyles s, MatchSimulation sim)
+        /// <summary>
+        /// O draft agora e um painel de canto durante o Dia, nao uma tela que congela o mundo.
+        ///
+        /// A troca importa mais do que parece: a carta deixa de ser escolhida num vacuo e passa a
+        /// ser escolhida COM o mapa a vista — dava para ver onde falta cobertura enquanto se le a
+        /// opcao. E ninguem fica esperando os outros tres lerem.
+        /// </summary>
+        private void DrawDraft(UiStyles s, MatchSimulation sim, PlayerState player)
         {
-            GUILayout.BeginArea(new Rect(Screen.width * 0.5f - 160f, 12f, 320f, 64f), s.Panel);
+            if (player.PendingDraftPicks <= 0 || player.DraftOptions.Count == 0) return;
 
-            if (sim.State.InBreather)
+            GUILayout.BeginArea(new Rect(Screen.width - 280, 412, 268, 268), s.Panel);
+            GUILayout.Label($"<b>AMANHECEU — ESCOLHA</b>  ({player.PendingDraftPicks})", s.Title);
+            GUILayout.Label($"<size=11>[1]-[3] escolhe · [Q] rerrola por {sim.Content.Rules.DraftRerollCost:0} " +
+                            $"ouro (voce tem {player.Gold:0})</size>", s.Small);
+            GUILayout.Space(4);
+
+            for (int i = 0; i < player.DraftOptions.Count; i++)
+            {
+                var spec = sim.Content.GetTower(player.DraftOptions[i]);
+                GUILayout.Label($"<b>[{i + 1}] {spec?.DisplayName}</b>  <size=11>{spec?.Tag}</size>\n" +
+                                $"<size=11>{spec?.Description}</size>",
+                                new GUIStyle(s.Label) { padding = new RectOffset(8, 8, 5, 5) },
+                                GUILayout.Height(66));
+            }
+
+            GUILayout.EndArea();
+        }
+
+        private void DrawNoite(UiStyles s, MatchSimulation sim)
+        {
+            GUILayout.BeginArea(new Rect(Screen.width * 0.5f - 180f, 12f, 360f, 68f), s.Panel);
+
+            bool dawnComing = sim.SecondsRemainingInPhase() <= sim.Content.Rules.SpawnCutoffBeforeDawn;
+
+            if (dawnComing)
+                GUILayout.Label("<color=#ffd479><b>O CEU ESTA CLAREANDO</b></color>", s.Big);
+            else if (sim.State.InBreather)
                 GUILayout.Label("<b>RESPIRO</b>", s.Big);
             else
                 GUILayout.Label($"<b>INVESTIDA {sim.State.SurgeIndex + 1}</b>", s.Big);
 
-            GUILayout.Label(sim.State.InBreather
-                ? "Deposite, repare — ou insista em dois kills."
-                : "WASD move · o ataque sai na direcao do movimento", s.Small);
-            GUILayout.EndArea();
-        }
-
-        private void DrawBalanco(UiStyles s, MatchSimulation sim, InputRouter input)
-        {
-            var player = input?.LocalPlayer;
-            if (player == null) return;
-
-            GUILayout.BeginArea(new Rect(Screen.width * 0.5f - 330f, Screen.height * 0.5f - 140f, 660f, 280f), s.Panel);
-            GUILayout.Label($"<b>BALANCO</b> — cidade nivel {sim.State.CityLevel}  ·  " +
-                            $"{sim.SecondsRemainingInPhase():0}s", s.Title);
-
-            if (player.PendingDraftPicks <= 0)
-            {
-                GUILayout.Label("Nada a escolher neste turno.", s.Label);
-                GUILayout.Label("<size=11>Cartas chegam quando a cidade sobe de nivel. XP vem de matar " +
-                                "e de DEPOSITAR — quem abastece o Silo tambem faz a cidade crescer.</size>", s.Small);
-            }
-            else
-            {
-                GUILayout.Label($"<b>Escolha uma carta</b> ({player.PendingDraftPicks} restante(s))  ·  " +
-                                $"[Q] rerrolar por {sim.Content.Rules.DraftRerollCost:0} ouro " +
-                                $"(voce tem {player.Gold:0})", s.Label);
-                GUILayout.Label("<size=11>Draft privado: cada jogador escolhe o seu, ao mesmo tempo.</size>", s.Small);
-                GUILayout.Space(6);
-
-                GUILayout.BeginHorizontal();
-                for (int i = 0; i < player.DraftOptions.Count; i++)
-                {
-                    var spec = sim.Content.GetTower(player.DraftOptions[i]);
-                    GUILayout.Label($"<b>[{i + 1}] {spec?.DisplayName}</b>\n<size=11>{spec?.Tag}\n\n{spec?.Description}</size>",
-                                    new GUIStyle(s.Label) { padding = new RectOffset(10, 10, 8, 8) },
-                                    GUILayout.Width(202), GUILayout.Height(150));
-                }
-                GUILayout.EndHorizontal();
-            }
-
+            GUILayout.Label(dawnComing
+                    ? "Nada mais vai nascer. Limpe o campo."
+                    : sim.State.InBreather
+                        ? "Deposite, repare — ou insista em dois kills."
+                        : "WASD move · o ataque sai na direcao do movimento",
+                s.Small);
             GUILayout.EndArea();
         }
 
@@ -248,12 +305,18 @@ namespace DestinyTogether.UI
 
         private static string PhaseName(PhaseId phase) => phase switch
         {
-            PhaseId.Preparo => "PREPARO",
-            PhaseId.Assalto => "ASSALTO",
-            PhaseId.Balanco => "BALANCO",
+            PhaseId.Dia => "DIA",
+            PhaseId.Noite => "NOITE",
             PhaseId.Fim => "FIM",
             _ => "—"
         };
+
+        private static string Clock(float seconds)
+        {
+            if (seconds < 0f) seconds = 0f;
+            int total = Mathf.CeilToInt(seconds);
+            return $"{total / 60}:{total % 60:00}";
+        }
 
         private static string ColorOf(ForecastBand band) => band switch
         {

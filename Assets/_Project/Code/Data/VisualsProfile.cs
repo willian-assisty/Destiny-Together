@@ -96,13 +96,39 @@ namespace DestinyTogether.Data
 
         [Tooltip("Material dos tiles do tabuleiro. Vazio = cor chapada por Quadrante.")]
         public Material TileMaterial;
-        [Tooltip("Espalhados pelos Arredores so para dar contexto. Nao afetam a simulacao.")]
+        [Tooltip("Vegetacao: florestas dos cantos e o mundo procedural. Nao afeta a simulacao.")]
         public List<GameObject> ScatterProps = new List<GameObject>();
-        [Range(0, 400)] public int ScatterCount = 0;
+
+        [Tooltip("Rocha e penhasco das pedreiras do mundo procedural. Vazio = primitivas.")]
+        public List<GameObject> QuarryProps = new List<GameObject>();
+
+        [Header("Mundo procedural")]
+        [Tooltip("Raio em CHUNKS (24 celulas) de cenario desenhado em volta do heroi. " +
+                 "Cada chunk custa ate ~26 objetos; 5 ja cobre o alcance de visao diurno.")]
+        [Range(2, 10)] public int PropRadiusChunks = 5;
+
+        [Tooltip("Largura alvo dos props de pedreira, em celulas.")]
+        public float QuarryTargetCells = 2.6f;
+        public float QuarryMaxHeightCells = 4f;
+
+        [Tooltip("Total de props, dividido entre as quatro florestas.")]
+        [Range(0, 600)] public int ScatterCount = 0;
+
+        [Tooltip("Raio de cada floresta, em celulas.")]
+        public float ForestRadius = 13f;
+
+        [Tooltip("Concentracao: 1 = uniforme na area; abaixo de 1 adensa o miolo e rareia a borda.")]
+        [Range(0.3f, 1.5f)] public float ForestDensityBias = 0.72f;
+
+        [Tooltip("Nenhum prop nasce a menos que isto do centro. Mantem o campo de batalha limpo.")]
+        public float ForestClearing = 4f;
 
         [Tooltip("Largura alvo de cada prop, em CELULAS. Props de cenario de pack costumam ter " +
                  "dezenas de unidades — sem normalizar, um penhasco cobre a cidade inteira.")]
-        public float ScatterTargetCells = 1.6f;
+        public float ScatterTargetCells = 2.2f;
+
+        [Tooltip("Teto de altura dos props, em celulas. Sem isto uma arvore estreita vira torre.")]
+        public float ScatterMaxHeightCells = 5f;
 
         [Tooltip("Variacao aleatoria de tamanho aplicada DEPOIS da normalizacao.")]
         public float ScatterMinScale = 0.7f;

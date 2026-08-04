@@ -25,13 +25,29 @@ namespace DestinyTogether.Sim
 
                 for (int n = 0; n < entry.Count; n++)
                 {
-                    Vec2 pos = entry.SpawnOutsideTowerRange
-                        ? OutOfReachPoint(state, entry.Lane, rng)
-                        : LaneGeometry.SpawnPoint(state.CityCenter, content.Arena.OutskirtsRadius, entry.Lane, rng);
+                    Vec2 pos;
+                    Lane lane = entry.Lane;
+
+                    if (entry.SpawnOutsideTowerRange)
+                    {
+                        pos = OutOfReachPoint(state, entry.Lane, rng);
+                    }
+                    else if (entry.AnyDirection)
+                    {
+                        // Cerco: sorteia o angulo primeiro e DERIVA a Faixa dele, para que o
+                        // monstro continue pertencendo ao setor onde de fato apareceu.
+                        pos = LaneGeometry.RingSpawnPoint(state.CityCenter, content.Arena.OutskirtsRadius, rng);
+                        lane = LaneGeometry.LaneOf(state.CityCenter, pos);
+                    }
+                    else
+                    {
+                        pos = LaneGeometry.SpawnPoint(state.CityCenter, content.Arena.OutskirtsRadius,
+                                                      entry.Lane, rng);
+                    }
 
                     // Dispersao para o pacote nao nascer todo em cima de si mesmo.
                     pos += new Vec2(rng.Range(-0.9f, 0.9f), rng.Range(-0.9f, 0.9f));
-                    SpawnMonster(state, spec, pos, entry.Lane, log);
+                    SpawnMonster(state, spec, pos, lane, log);
                 }
             }
         }

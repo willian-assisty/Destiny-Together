@@ -1,17 +1,23 @@
 namespace DestinyTogether.Sim
 {
-    /// <summary>Fases do turno. Unico pedaco da state machine que a rede replica.</summary>
+    /// <summary>
+    /// O ciclo do turno. Duas fases, nao tres: DIA e NOITE.
+    ///
+    /// O turno inteiro e um ciclo de 24h comprimido. De dia nao ha inimigo nenhum e o mapa e
+    /// seguro — e a janela de construir, colher e EXPLORAR as florestas. De noite os monstros
+    /// vem do anel inteiro. A troca nao e cosmetica: e a unica coisa que diz ao jogador se ele
+    /// deve estar longe de casa ou perto dela.
+    /// </summary>
     public enum PhaseId
     {
         None = 0,
-        /// <summary>Sem inimigos. Os 4 jogadores constroem e colhem SIMULTANEAMENTE. Termina em 4 Prontos ou timeout.</summary>
-        Preparo = 1,
-        /// <summary>Tempo real. Investidas de ~25s separadas por Respiros de ~8s. Torres atiram sozinhas.</summary>
-        Assalto = 2,
-        /// <summary>Mundo congelado. Deposito automatico, cartao do turno e draft privado simultaneo.</summary>
-        Balanco = 3,
+        /// <summary>Sem inimigos. Construir, colher, explorar e draftar, todos ao mesmo tempo.
+        /// Termina no relogio ou quando todos marcam Pronto — quem quer a noite mais cedo, tem.</summary>
+        Dia = 1,
+        /// <summary>Tempo real. A horda vem de todas as direcoes. Termina no relogio, sempre.</summary>
+        Noite = 2,
         /// <summary>Partida encerrada.</summary>
-        Fim = 4
+        Fim = 3
     }
 
     public enum MatchOutcome
@@ -92,6 +98,23 @@ namespace DestinyTogether.Sim
         Bau = 2
     }
 
+    /// <summary>
+    /// O que um Esconderijo guarda.
+    ///
+    /// Explorar paga nas moedas de PROGRESSO (XP e Ouro); colher paga nas de MANUTENCAO
+    /// (Madeira e Pedra). Essa separacao e o que da ao dia duas atividades diferentes em vez de
+    /// duas fontes do mesmo recurso: quem colhe mantem a maquina rodando, quem explora faz a
+    /// cidade subir de nivel — e nivel de cidade da carta para TODO MUNDO, entao o achado de um
+    /// e o ganho dos quatro.
+    /// </summary>
+    public enum CacheKind
+    {
+        /// <summary>Comum. XP e um pouco de Ouro.</summary>
+        Suprimento = 0,
+        /// <summary>Raro, no fundo da mata. XP grande — costuma valer um nivel inteiro de cidade.</summary>
+        Relicario = 1
+    }
+
     public enum MonsterArchetype
     {
         /// <summary>Volume. HP baixo, chega em pacotes de 12-20. Alimenta o combo.</summary>
@@ -104,8 +127,13 @@ namespace DestinyTogether.Sim
         Cuspidor = 3,
         /// <summary>Estatico, nasce FORA do alcance das torres, gera Enxames. So mao humana mata.</summary>
         Ninho = 4,
-        /// <summary>Kaiju do turno final.</summary>
-        Kaiju = 5
+        /// <summary>Kaiju da noite final.</summary>
+        Kaiju = 5,
+        /// <summary>
+        /// Cacador. Ignora predio e vai atras de HEROI, de qualquer distancia. Existe por causa
+        /// do ciclo dia/noite: sem ele, explorar de madrugada seria so demorado, nunca arriscado.
+        /// </summary>
+        Rondador = 6
     }
 
     public enum HeroClass

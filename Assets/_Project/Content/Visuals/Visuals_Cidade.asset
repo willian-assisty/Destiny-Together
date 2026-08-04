@@ -15,7 +15,7 @@ MonoBehaviour:
   DisplayName: Cidade sitiada
   Notes: Polylised - Medieval Desert City + Fantasy Forest. Gerado por Destiny Together
     > Aplicar arte importada.
-  SetupVersion: 4
+  SetupVersion: 6
   Entries:
   - DefName: Balestra
     Prefab: {fileID: 1356718791037878, guid: d4bbfcf82f1bd6f43a1ef19c811777fa, type: 3}
@@ -146,15 +146,24 @@ MonoBehaviour:
   - {fileID: 1360444800251178, guid: c4789a704ccd23f4d9aa4a8694b41fa0, type: 3}
   - {fileID: 1141541113816982, guid: 29e966885f102e54d97ab5f78ed715c8, type: 3}
   - {fileID: 1058886637327582, guid: 4cc4a170ba1e7ae48a9688fe23ddbe89, type: 3}
+  - {fileID: 1238566819580450, guid: 5db841ccc057fc54d896da56796529ba, type: 3}
   - {fileID: 1876142201406200, guid: f6a029b9b005e3b48ba76000f8c2b62a, type: 3}
+  - {fileID: 1113708428238928, guid: 0f423507880a570418de6a595999407c, type: 3}
+  QuarryProps:
+  - {fileID: 1512402997361328, guid: a323c930711a463478f1cadd4a89ff53, type: 3}
   - {fileID: 1280221912402496, guid: 41a670177e1723444b5622302f81dd16, type: 3}
   - {fileID: 1310941924343414, guid: b9f2941615c218b4282635a3390d783c, type: 3}
   - {fileID: 1107357078673850, guid: b7980771a74d0644ab032498d1948ca2, type: 3}
-  - {fileID: 1210640465679106, guid: 4d4f3743a7b39904aa665563fe459249, type: 3}
-  - {fileID: 1319930702440686, guid: 55eac99f5049e5045a42f2528f476504, type: 3}
-  ScatterCount: 160
-  ScatterTargetCells: 1.6
-  ScatterMinScale: 0.7
-  ScatterMaxScale: 1.5
+  PropRadiusChunks: 5
+  QuarryTargetCells: 2.6
+  QuarryMaxHeightCells: 4
+  ScatterCount: 320
+  ForestRadius: 13
+  ForestDensityBias: 0.72
+  ForestClearing: 4
+  ScatterTargetCells: 2.2
+  ScatterMaxHeightCells: 5
+  ScatterMinScale: 0.65
+  ScatterMaxScale: 1.6
   ScatterEulerAngles: {x: -90, y: 0, z: 0}
   GroundTint: {r: 0.4, g: 0.35, b: 0.21, a: 1}

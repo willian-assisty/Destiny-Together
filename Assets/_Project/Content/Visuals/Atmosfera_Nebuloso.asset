@@ -27,3 +27,10 @@ MonoBehaviour:
   Skybox: {fileID: 0}
   BackgroundColor: {r: 0.05, g: 0.055, b: 0.075, a: 1}
   UseSkyboxAsBackground: 0
+  DaySunColor: {r: 1, g: 0.96, b: 0.86, a: 1}
+  DaySunIntensity: 1.35
+  DayShadowStrength: 0.55
+  DayAmbientColor: {r: 0.52, g: 0.55, b: 0.6, a: 1}
+  DayFogColor: {r: 0.72, g: 0.74, b: 0.7, a: 1}
+  DayFogDensity: 0.01
+  DayBackgroundColor: {r: 0.66, g: 0.71, b: 0.76, a: 1}

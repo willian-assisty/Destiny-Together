@@ -105,3 +105,6 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Saida do harness headless (Tools/Headless/run.ps1) — recompila em segundos, nao versionar
+/[Tt]ools/[Hh]eadless/bin/
