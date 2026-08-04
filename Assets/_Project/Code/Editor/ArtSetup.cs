@@ -87,12 +87,44 @@ namespace DestinyTogether.EditorTools
         [InitializeOnLoadMethod]
         private static void AutoSetup()
         {
-            EditorApplication.delayCall += () =>
+            EditorApplication.delayCall += TrySetupOnce;
+        }
+
+        private static void TrySetupOnce()
+        {
+            if (AssetDatabase.LoadAssetAtPath<VisualsProfile>(VisualsPath) != null) return;
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(TownHallPath) == null) return; // packs ausentes
+            Apply(verbose: true);
+        }
+
+        /// <summary>
+        /// Importar arte não recompila nada, então <see cref="AutoSetup"/> sozinho nunca veria os
+        /// packs chegando — o setup ficaria esperando um clique de menu que ninguém sabe que
+        /// precisa dar. Este observador fecha essa lacuna: assim que os prefabs entram, a arte é
+        /// aplicada.
+        /// </summary>
+        private sealed class ImportWatcher : AssetPostprocessor
+        {
+            private static void OnPostprocessAllAssets(string[] imported, string[] deleted,
+                                                       string[] movedTo, string[] movedFrom)
             {
-                if (AssetDatabase.LoadAssetAtPath<VisualsProfile>(VisualsPath) != null) return;
-                if (AssetDatabase.LoadAssetAtPath<GameObject>(TownHallPath) == null) return; // packs ausentes
-                Apply(verbose: true);
-            };
+                if (imported == null || imported.Length == 0) return;
+
+                bool packArrived = false;
+                foreach (var path in imported)
+                {
+                    if (path.StartsWith(City, System.StringComparison.Ordinal) ||
+                        path.StartsWith(Forest, System.StringComparison.Ordinal))
+                    {
+                        packArrived = true;
+                        break;
+                    }
+                }
+
+                // TrySetupOnce sai cedo se o perfil já existe, então os assets que o próprio
+                // Apply cria não realimentam este callback.
+                if (packArrived) EditorApplication.delayCall += TrySetupOnce;
+            }
         }
 
         public static void Apply(bool verbose)
