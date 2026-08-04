@@ -13,7 +13,13 @@ namespace DestinyTogether.Sim
         /// </summary>
         private const int StartingHandSize = 4;
 
-        public static MatchState Create(IContentDatabase content, int seed, int playerCount)
+        /// <param name="chosenHeroes">
+        /// Heroi de cada assento, na ordem. Entradas invalidas (ou lista curta) caem para o
+        /// proximo do pool — duplicatas sao permitidas de proposito: o time perde eficiencia,
+        /// nunca viabilidade.
+        /// </param>
+        public static MatchState Create(IContentDatabase content, int seed, int playerCount,
+                                        DefId[] chosenHeroes = null)
         {
             var rules = content.Rules;
             var arena = content.Arena;
@@ -55,9 +61,12 @@ namespace DestinyTogether.Sim
                         player.GrantQuadrant((Quadrant)q);
                 player.GrantQuadrant(player.Quadrant);
 
-                var heroDef = heroPool != null && heroPool.Count > 0
-                    ? heroPool[i % heroPool.Count]
-                    : DefId.None;
+                DefId heroDef = DefId.None;
+                if (chosenHeroes != null && i < chosenHeroes.Length && content.GetHero(chosenHeroes[i]) != null)
+                    heroDef = chosenHeroes[i];
+                else if (heroPool != null && heroPool.Count > 0)
+                    heroDef = heroPool[i % heroPool.Count];
+
                 var heroSpec = content.GetHero(heroDef);
 
                 var hero = new HeroState

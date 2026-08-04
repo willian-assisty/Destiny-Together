@@ -9,16 +9,36 @@ Unity **6000.3.21f1** · URP · C# · PC primeiro.
 
 ## Como rodar
 
-Abrir `Assets/_Project/Scenes/Arena.unity` e dar Play. O `Bootstrap` monta câmera, luz, tabuleiro
-e HUD por código — não há nada para configurar. Se a cena estiver corrompida:
+Abrir `Assets/_Project/Scenes/Arena.unity` e dar Play. Cai no **menu inicial**: número de
+assentos, qual assento você controla, classe de cada um e seed. O `Bootstrap` monta câmera, luz,
+tabuleiro e telas por código — não há nada para configurar. Se a cena estiver corrompida:
 `Destiny Together > Recriar cena Arena`.
 
-**Controles:** `WASD` move · `1-8` seleciona carta · clique ergue · botão direito cancela ·
-`R` marca Pronto · scroll dá zoom · no Balanço, `1-3` escolhe carta e `Q` rerrola.
+Para iterar rápido sem passar pelo menu, marque **`Pular Menu`** no componente `Bootstrap`.
 
-**Menus úteis** (`Destiny Together` na barra do editor):
+**Controles**
+
+| | |
+|---|---|
+| `WASD` | move — o ataque sai na direção do movimento, sem mira |
+| `1`-`8` | seleciona carta da mão · clique ergue · botão direito cancela |
+| `R` | marca Pronto (ao terceiro Pronto o Preparo trava em 15s) |
+| scroll | zoom |
+| `ESC` | pausa (continuar / reiniciar / menu) |
+| `F1` | painel de teste |
+| Balanço | `1`-`3` escolhe carta · `Q` rerrola |
+
+**Painel de teste (`F1`)** — velocidade 0,25× a 8×, pular fase, pular turno, injetar recursos e
+cartas, limpar a horda, curar a cidade. Existe porque uma partida dura ~30 min e o Kaiju só
+aparece no turno 9: sem isso, o Ato 3 nunca seria calibrado. Nada ali faz parte das regras.
+
+**Menus do editor** (`Destiny Together`):
 - `Simular partida no console` — roda uma partida inteira headless em milissegundos.
 - `Gerar assets de conteudo padrao` — materializa os ScriptableObjects para balancear na mão.
+
+> `activeInputHandler` está em **Both** (legado + Input System). O menu e o HUD são IMGUI, que
+> depende dos eventos legados; o gameplay usa o Input System novo. Trocar para "New only"
+> quebra as telas. Mudanças nessa opção exigem reiniciar o editor.
 
 ## Arquitetura
 

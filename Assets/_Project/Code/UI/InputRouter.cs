@@ -113,7 +113,8 @@ namespace DestinyTogether.UI
                     SelectedCardIndex = SelectedCardIndex == i ? -1 : i;
             }
 
-            if (keyboard.escapeKey.wasPressedThisFrame) SelectedCardIndex = -1;
+            // ESC pertence a pausa, nao ao cancelamento de carta — uma tecla, uma acao.
+            // Cancelar e botao direito.
             if (SelectedCardIndex >= player.Hand.Count) SelectedCardIndex = -1;
         }
 

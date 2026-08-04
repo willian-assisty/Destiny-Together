@@ -34,14 +34,15 @@ namespace DestinyTogether.Sim
         public SimEventLog Events => _events;
         public TurnWaveSpec CurrentTurnWaves => _currentTurnWaves;
 
-        public MatchSimulation(IContentDatabase content, int seed, int playerCount, ILogSink log = null)
+        public MatchSimulation(IContentDatabase content, int seed, int playerCount,
+                               ILogSink log = null, DefId[] chosenHeroes = null)
         {
             _content = content ?? throw new ArgumentNullException(nameof(content));
             _log = log ?? NullLogSink.Instance;
             _spawnRng = Rng.ForChannel(seed, 1, 0);
             _draftRng = Rng.ForChannel(seed, 2, 0);
 
-            State = MatchFactory.Create(content, seed, playerCount);
+            State = MatchFactory.Create(content, seed, playerCount, chosenHeroes);
             _playerCount = State.Players.Count;
             _currentTurnWaves = content.GetTurnWaves(State.TurnNumber, _playerCount);
             EnterPhase(PhaseId.Preparo);
@@ -442,5 +443,48 @@ namespace DestinyTogether.Sim
         }
 
         public float SecondsRemainingInPhase() => Math.Max(0f, State.PhaseDuration - State.PhaseElapsed);
+
+        // ----------------------------------------------------------------------------------
+        // Atalhos de teste
+        //
+        // Existem porque uma partida completa leva ~30 minutos, e ninguem calibra o turno 8
+        // jogando os sete anteriores toda vez. Ficam agrupados e prefixados aqui para que seja
+        // obvio, em qualquer leitura futura, que nao fazem parte das regras do jogo.
+        // ----------------------------------------------------------------------------------
+
+        /// <summary>SO PARA TESTE: encerra a fase atual imediatamente.</summary>
+        public void DebugSkipPhase()
+        {
+            switch (State.Phase)
+            {
+                case PhaseId.Preparo:
+                case PhaseId.Balanco:
+                    State.PhaseElapsed = State.PhaseDuration + 1f;
+                    break;
+
+                case PhaseId.Assalto:
+                    SpawnSystem.DissolveAll(State, _events);
+                    EnterPhase(PhaseId.Balanco);
+                    break;
+            }
+        }
+
+        /// <summary>SO PARA TESTE: pula o turno inteiro, indo direto para o Preparo do proximo.</summary>
+        public void DebugSkipTurn()
+        {
+            if (State.Phase == PhaseId.Assalto) SpawnSystem.DissolveAll(State, _events);
+            if (State.Phase != PhaseId.Balanco) EnterPhase(PhaseId.Balanco);
+            EconomySystem.AutoResolvePendingDrafts(State, _content, _draftRng, _events);
+            State.PhaseElapsed = State.PhaseDuration + 1f;
+        }
+
+        /// <summary>SO PARA TESTE: entrega uma carta aleatoria do pool ao jogador.</summary>
+        public void DebugGrantCard(PlayerId player)
+        {
+            var pool = _content.TowerPool;
+            var target = State.GetPlayer(player);
+            if (pool == null || pool.Count == 0 || target == null) return;
+            target.Hand.Add(pool[_draftRng.Range(0, pool.Count)]);
+        }
     }
 }
