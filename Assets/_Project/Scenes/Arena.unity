@@ -164,6 +164,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   Content: {fileID: 0}
+  Visuals: {fileID: 0}
   PularMenu: 0
   JogadoresAoPularMenu: 1
   LogPhaseChanges: 1

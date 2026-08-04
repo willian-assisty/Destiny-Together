@@ -50,6 +50,8 @@ namespace DestinyTogether.Presentation
         public float PositionSmoothing = 18f;
         public float RotationSmoothing = 14f;
 
+        private static readonly Color HitFlash = new Color(1f, 0.45f, 0.42f);
+
         public EntityId Id => _id;
         public Transform Visual => _visual != null ? _visual : transform;
 
@@ -97,6 +99,24 @@ namespace DestinyTogether.Presentation
             transform.position = position;
         }
 
+        /// <summary>
+        /// Escala permanente do visual — usada quando duas torres iguais se fundem e a peça
+        /// precisa ficar mais alta. Atualiza a escala de repouso, senão o próximo punch de
+        /// ataque desfaria o crescimento.
+        ///
+        /// Funciona igual para primitiva e para arte comprada: a posição local é escalada junto,
+        /// o que preserva tanto o pivot central da primitiva quanto a base no chão do prefab.
+        /// </summary>
+        public void ScaleVisual(Vector3 factor)
+        {
+            var visual = Visual;
+            if (visual == null) return;
+
+            visual.localScale = Vector3.Scale(visual.localScale, factor);
+            visual.localPosition = Vector3.Scale(visual.localPosition, factor);
+            _baseScale = visual.localScale;
+        }
+
         protected virtual void Update()
         {
             float dt = Time.deltaTime;
@@ -129,7 +149,9 @@ namespace DestinyTogether.Presentation
                     break;
 
                 case ViewActionId.Hit:
-                    Tint(Color.Lerp(Color.white, _baseColor, t));
+                    // Flash avermelhado voltando para a cor base. Com arte texturizada um flash
+                    // branco seria invisivel — a maioria dos materiais ja tem base branca.
+                    Tint(Color.Lerp(HitFlash, _baseColor, t));
                     break;
 
                 case ViewActionId.Build:

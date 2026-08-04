@@ -1,0 +1,142 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5eb0bc3968039c74c957c58ff1cd01df, type: 3}
+  m_Name: Visuals_Cidade
+  m_EditorClassIdentifier: DT.Data::DestinyTogether.Data.VisualsProfile
+  DisplayName: Cidade sitiada
+  Notes: Polylised - Medieval Desert City + Fantasy Forest. Gerado por Destiny Together
+    > Aplicar arte importada.
+  Entries:
+  - DefName: Balestra
+    Prefab: {fileID: 1356718791037878, guid: d4bbfcf82f1bd6f43a1ef19c811777fa, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: TorreDeGelo
+    Prefab: {fileID: 1933501008555322, guid: 3d5764d3cca272942b5087884ae75b75, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: BalistaDeImpacto
+    Prefab: {fileID: 1534625454089636, guid: f26b24b97b5031e4d8984eb41762eda1, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: PostoDeVigia
+    Prefab: {fileID: 1085690542139798, guid: b8a64239d2d33cc45a19f47b821be342, type: 3}
+    TargetCells: 0.85
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Braseiro
+    Prefab: {fileID: 1235266061306044, guid: 4a24c2abcf3d91547bdeff629e1532c3, type: 3}
+    TargetCells: 0.8
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Muralha
+    Prefab: {fileID: 1769100193472926, guid: 263aefa800a1fe74f92bb203147304d3, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Serraria
+    Prefab: {fileID: 1624312244548522, guid: 144d1d48e42b16e408d98127b892490c, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Pedreira
+    Prefab: {fileID: 1448931260341668, guid: 914008923a1f33345b91f7350da887df, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Oficina
+    Prefab: {fileID: 1924505923262870, guid: d6dfddd766e16874bafbff7d2f2501b3, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  - DefName: Deposito
+    Prefab: {fileID: 1174801331850410, guid: 84573fa2e72500d49835406b46d71622, type: 3}
+    TargetCells: 1
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  Tree:
+    DefName: Arvore
+    Prefab: {fileID: 1656880635380694, guid: 4215dcb581b5b634c914cd0cf1ccd81b, type: 3}
+    TargetCells: 1.8
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  Rock:
+    DefName: Rocha
+    Prefab: {fileID: 1512402997361328, guid: a323c930711a463478f1cadd4a89ff53, type: 3}
+    TargetCells: 1.3
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  Chest:
+    DefName: Bau
+    Prefab: {fileID: 1097295525789290, guid: 07a4904133d4b4142b6e071d776d66e4, type: 3}
+    TargetCells: 0.9
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  TownHall:
+    DefName: Prefeitura
+    Prefab: {fileID: 1044818417282170, guid: 9a0029d66f7229f4dacf38d09d5ddea3, type: 3}
+    TargetCells: 3.2
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    KeepOriginalScale: 0
+  GroundMaterial: {fileID: 2100000, guid: 02f626fd2f11216458890862c5864d34, type: 2}
+  TileMaterial: {fileID: 0}
+  ScatterProps:
+  - {fileID: 1801292862687298, guid: ccdba26d869ffd548856ea7eca38ac97, type: 3}
+  - {fileID: 1361885322256504, guid: ca09ab545ccbe4346af61d072bc2b67f, type: 3}
+  - {fileID: 1280876935764306, guid: 7ffc5928338e9a1418cd3caa68441619, type: 3}
+  - {fileID: 1582960387707150, guid: 9e9d25172ea57e54cad899a510194ea8, type: 3}
+  - {fileID: 1939841420551160, guid: de205966855be504a95152ab56d0896e, type: 3}
+  - {fileID: 1230710984052900, guid: a923030e277c73c4880630365f3a67b0, type: 3}
+  - {fileID: 1841920225215856, guid: c22e62201f2b11245b2b8f3188b66655, type: 3}
+  - {fileID: 1360444800251178, guid: c4789a704ccd23f4d9aa4a8694b41fa0, type: 3}
+  - {fileID: 1141541113816982, guid: 29e966885f102e54d97ab5f78ed715c8, type: 3}
+  - {fileID: 1058886637327582, guid: 4cc4a170ba1e7ae48a9688fe23ddbe89, type: 3}
+  - {fileID: 1876142201406200, guid: f6a029b9b005e3b48ba76000f8c2b62a, type: 3}
+  - {fileID: 1280221912402496, guid: 41a670177e1723444b5622302f81dd16, type: 3}
+  - {fileID: 1310941924343414, guid: b9f2941615c218b4282635a3390d783c, type: 3}
+  - {fileID: 1107357078673850, guid: b7980771a74d0644ab032498d1948ca2, type: 3}
+  - {fileID: 1210640465679106, guid: 4d4f3743a7b39904aa665563fe459249, type: 3}
+  - {fileID: 1319930702440686, guid: 55eac99f5049e5045a42f2528f476504, type: 3}
+  ScatterCount: 110
+  ScatterMinScale: 0.7
+  ScatterMaxScale: 1.5

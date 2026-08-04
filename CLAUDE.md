@@ -78,6 +78,8 @@ avança em passos determinísticos — mesma seed + mesmos comandos = mesma part
   cilindro = ataca à distância); cor diz de que **lado** está. A arte final herda essa gramática.
 - **Views:** toda arte mora no filho `Visual`. Presenters chamam
   `IEntityView.PlayAction(ViewActionId, duração)`, nunca `Animator.Play("...")`.
+- **Arte real:** 1 célula = 1 unidade, pivot nos pés, +Z para a frente. `VisualFitter` normaliza
+  automaticamente por bounds, então pack de loja fora de escala não é problema.
 - **Nomes de conteúdo:** `DefId` vem do hash FNV-1a do nome. Renomear um prédio é uma mudança de
   conteúdo que invalida replays — deliberadamente visível.
 
@@ -98,6 +100,41 @@ funciona. Quebrar qualquer uma exige mudar o teste correspondente primeiro.
    Ouro = reroll. **Nada compra construção** — construir vem exclusivamente de subir de nível.
 5. **Todo desbloqueio muda uma decisão, não um número.** Distritos dão regra (Queimadura, ignora
    armadura, não vira Escombro), nunca "+X%". Foi a crítica mais votada ao jogo de referência.
+
+## Arte
+
+Packs em uso: **Polylised — Medieval Desert City** (construções, árvores mortas, penhascos,
+props) e **Fantasy Forest Environment Free Sample** (material de terra do chão).
+
+`Destiny Together > Aplicar arte importada` faz tudo: converte os materiais para URP, monta o
+`VisualsProfile`, cria a atmosfera e liga ambos ao Bootstrap. Roda sozinho na primeira compilação
+depois do import.
+
+**O mapeamento é por silhueta, não por nome** — a mesma gramática dos placeholders. Torre redonda
+atira longe, octógono congela, retangular empurra: três formas distintas para três comportamentos
+distintos, legíveis de cima e no escuro. Casa civil nunca vira torre, porque casa não deve parecer
+que atira. Para trocar qualquer escolha: `Destiny Together > Mapear arte importada`.
+
+Monstros e heróis continuam em primitivas até a arte deles chegar. Definição sem prefab cai para
+primitiva sozinha — nunca existe um estado "meio migrado" em que o jogo não abre.
+
+**Materiais.** Os packs vêm com shader built-in; num projeto URP isso renderiza magenta.
+`UrpMaterialUpgrader` converte para `URP/Lit` preservando cor, albedo, normal e emissão. Ele
+**altera os .mat dos packs** — reimportar o `.unitypackage` desfaz.
+
+**Atmosfera.** `Atmosfera_Nebuloso.asset` controla sol, névoa, ambiente e fundo. A névoa não é
+enfeite: horizonte fechado é o que faz um monstro *aparecer* vindo do escuro, o mesmo papel da
+névoa negra no jogo de referência. `FogDensity` acima de ~0.05 começa a apagar os pilares de
+Faixa, que são a telegrafia da ameaça — clima que esconde informação de jogo sai caro.
+
+**Escala.** `VisualFitter` mede os bounds reais e normaliza para `TargetCells`, base no chão,
+centro em XZ. É por isso que packs em escalas diferentes convivem sem ninguém tocar em import
+settings de FBX — e por isso trocar de pack depois continua barato.
+
+**Como a normalização funciona.** `VisualFitter` mede os bounds reais dos renderers e escala a
+peça para caber em `TargetCells`, com a base no chão e centrada em XZ. É por isso que um pack cujas
+árvores têm 12 unidades e outro cujas casas têm 0,4 convivem sem ninguém mexer em import settings
+de FBX — e por isso trocar de pack depois é barato.
 
 ## Estado atual
 

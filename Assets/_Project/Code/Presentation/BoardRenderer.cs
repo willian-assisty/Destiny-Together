@@ -30,17 +30,23 @@ namespace DestinyTogether.Presentation
         private Transform _highlight;
         private Renderer _highlightRenderer;
 
-        private static readonly Color GroundColor = new Color(0.16f, 0.17f, 0.19f);
-        private static readonly Color EmptyTile = new Color(0.24f, 0.25f, 0.28f);
-        private static readonly Color TownHallTile = new Color(0.85f, 0.80f, 0.55f);
-        private static readonly Color RubbleTile = new Color(0.30f, 0.16f, 0.14f);
-        private static readonly Color GraveTile = new Color(0.12f, 0.12f, 0.16f);
+        // Paleta escura. Os tiles precisam ser LEGÍVEIS sem competir com a arte: eles informam
+        // (onde dá para construir, de quem é o Quadrante), não decoram.
+        private static readonly Color GroundColor = new Color(0.11f, 0.12f, 0.14f);
+        private static readonly Color EmptyTile = new Color(0.18f, 0.19f, 0.22f);
+        private static readonly Color TownHallTile = new Color(0.42f, 0.38f, 0.28f);
+        private static readonly Color RubbleTile = new Color(0.26f, 0.13f, 0.11f);
+        private static readonly Color GraveTile = new Color(0.09f, 0.09f, 0.12f);
 
-        public BoardRenderer(PlaceholderFactory factory, Transform root, BoardGrid grid, IContentDatabase content)
+        private readonly VisualsProfile _profile;
+
+        public BoardRenderer(PlaceholderFactory factory, Transform root, BoardGrid grid,
+                             IContentDatabase content, VisualsProfile profile = null)
         {
             _factory = factory;
             _root = root;
             _grid = grid;
+            _profile = profile;
 
             _tileRenderers = new Renderer[grid.Size * grid.Size];
             _lastState = new CellState[grid.Size * grid.Size];
@@ -61,7 +67,10 @@ namespace DestinyTogether.Presentation
             ground.transform.SetParent(_root, false);
             ground.transform.localScale = new Vector3(radius * 2.6f, 0.2f, radius * 2.6f);
             ground.transform.position = GridToWorld.ToWorld(_grid.Center, -0.15f);
-            ground.GetComponent<Renderer>().sharedMaterial = _factory.GetMaterial(GroundColor);
+            ground.GetComponent<Renderer>().sharedMaterial =
+                _profile != null && _profile.GroundMaterial != null
+                    ? _profile.GroundMaterial
+                    : _factory.GetMaterial(GroundColor);
         }
 
         private void BuildTiles()

@@ -30,6 +30,13 @@ namespace DestinyTogether.App
         [Tooltip("Assets de balanceamento. Vazio = conteudo padrao embutido em codigo.")]
         public ContentDatabase Content;
 
+        [Tooltip("Arte do jogo. Vazio = tudo em primitivas. Trocar este asset troca a aparencia " +
+                 "inteira em um clique; entradas nao mapeadas continuam em primitiva.")]
+        public VisualsProfile Visuals;
+
+        [Tooltip("Luz, nevoa e ceu. Vazio = crepusculo frio padrao.")]
+        public AtmosphereProfile Atmosfera;
+
         [Tooltip("Pula o menu e cai direto numa partida com estes valores. Util para iterar rapido.")]
         public bool PularMenu = false;
         [Range(1, 4)] public int JogadoresAoPularMenu = 1;
@@ -54,6 +61,7 @@ namespace DestinyTogether.App
         private LaneForecast[] _forecast;
         private PhaseId _lastPhase = PhaseId.None;
         private MatchSetup _lastSetup;
+        private AtmosphereProfile _atmosphere;
 
         public MatchSimulation Simulation => _sim;
 
@@ -84,22 +92,18 @@ namespace DestinyTogether.App
             var camGo = new GameObject("Camera Iso");
             camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.06f, 0.07f, 0.09f);
             cam.farClipPlane = 200f;
             camGo.AddComponent<AudioListener>();
             _camera = camGo.AddComponent<CameraRig>();
 
             var lightGo = new GameObject("Sol");
-            var light = lightGo.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.15f;
-            light.color = new Color(1f, 0.97f, 0.9f);
-            light.shadows = LightShadows.Soft;
-            lightGo.transform.rotation = Quaternion.Euler(52f, 30f, 0f);
+            var sun = lightGo.AddComponent<Light>();
+            sun.type = LightType.Directional;
 
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.28f, 0.30f, 0.36f);
+            // Sem asset de atmosfera o jogo ainda abre — e já abre escuro, porque o clima
+            // fechado é premissa do desenho, não um acabamento opcional.
+            _atmosphere = Atmosfera != null ? Atmosfera : AtmosphereProfile.CreateDefaultDark();
+            AtmosphereApplier.Apply(_atmosphere, cam, sun);
         }
 
         // ------------------------------------------------------------------------------
@@ -130,7 +134,7 @@ namespace DestinyTogether.App
             if (local != null) local.DisplayName = "Voce";
 
             _worldRoot = new GameObject("World");
-            _presentation = new PresentationDirector(_sim, _worldRoot.transform);
+            _presentation = new PresentationDirector(_sim, _worldRoot.transform, Visuals);
             _input = new InputRouter(_sim, _camera, _presentation.Board, new PlayerId(setup.LocalPlayerIndex));
 
             _camera.SetFocusImmediate(_sim.State.CityCenter);
