@@ -1,0 +1,17 @@
+{
+    "name": "DT.Data",
+    "rootNamespace": "DestinyTogether.Data",
+    "references": [
+        "DT.Core",
+        "DT.Sim"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

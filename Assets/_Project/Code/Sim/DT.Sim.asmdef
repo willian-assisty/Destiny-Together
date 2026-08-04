@@ -1,0 +1,16 @@
+{
+    "name": "DT.Sim",
+    "rootNamespace": "DestinyTogether.Sim",
+    "references": [
+        "DT.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

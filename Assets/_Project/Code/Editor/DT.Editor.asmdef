@@ -1,0 +1,22 @@
+{
+    "name": "DT.Editor",
+    "rootNamespace": "DestinyTogether.EditorTools",
+    "references": [
+        "DT.Core",
+        "DT.Sim",
+        "DT.Data",
+        "DT.Presentation",
+        "DT.App"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

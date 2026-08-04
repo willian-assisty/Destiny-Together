@@ -1,0 +1,22 @@
+{
+    "name": "DT.App",
+    "rootNamespace": "DestinyTogether.App",
+    "references": [
+        "DT.Core",
+        "DT.Sim",
+        "DT.Data",
+        "DT.Net.Api",
+        "DT.Presentation",
+        "DT.UI",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

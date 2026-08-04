@@ -1,0 +1,20 @@
+{
+    "name": "DT.UI",
+    "rootNamespace": "DestinyTogether.UI",
+    "references": [
+        "DT.Core",
+        "DT.Sim",
+        "DT.Data",
+        "DT.Presentation",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
