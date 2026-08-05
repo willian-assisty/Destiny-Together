@@ -43,11 +43,17 @@ namespace DestinyTogether.Presentation
         /// View de uma entidade da simulação. Usa a arte do perfil quando existe; caso contrário,
         /// a primitiva descrita por <paramref name="fallback"/>.
         /// </summary>
+        /// <param name="tintOverride">
+        /// Cor do assento, quando a peça pertence a um jogador. Vale para a primitiva E para a
+        /// arte de verdade: com quatro heróis usando a mesma malha, "de quem é esse" volta a ser
+        /// indistinguível se o modelo mandar na cor. Cor diz de que LADO a coisa está — é regra
+        /// de leitura, não decoração, e não é a arte que decide.
+        /// </param>
         public EntityView CreateEntityView(string name, DefId def, VisualStyle fallback,
                                            Vector3 position, Color? tintOverride = null)
         {
             if (_profile != null && _profile.TryGet(def, out var entry))
-                return CreateFromPrefab(name, entry, position, fallback.Color);
+                return CreateFromPrefab(name, entry, position, tintOverride);
 
             if (tintOverride.HasValue) fallback.Color = tintOverride.Value;
             return _placeholders.CreateView(name, fallback, position);
@@ -65,6 +71,36 @@ namespace DestinyTogether.Presentation
         /// A Prefeitura é o único objeto que não é uma entidade da simulação mas precisa de view:
         /// ela é o tabuleiro, não uma peça. Por isso tem caminho próprio.
         /// </summary>
+        /// <summary>
+        /// Aplica a cor do assento na arte importada e, de quebra, cobre o caso do modelo que
+        /// chega SEM material.
+        ///
+        /// Malha exportada por gerador (Meshy e afins) costuma vir só com geometria. Em URP, um
+        /// renderer sem material desenha magenta — o personagem apareceria como uma mancha rosa e
+        /// pareceria bug de shader. Atribuir o material de placeholder resolve as duas coisas com
+        /// uma linha: a peça passa a ter material E a cor certa do jogador.
+        /// </summary>
+        private void ApplyOwnerTint(GameObject art, Color tint)
+        {
+            foreach (var r in art.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer) continue;
+
+                if (r.sharedMaterial == null)
+                {
+                    r.sharedMaterial = _placeholders.GetMaterial(tint);
+                    continue;
+                }
+
+                // Com material próprio (arte texturizada), tinge por property block para não
+                // editar o asset do artista.
+                var block = new MaterialPropertyBlock();
+                r.GetPropertyBlock(block);
+                block.SetColor(ShaderIds.BaseColor, tint);
+                r.SetPropertyBlock(block);
+            }
+        }
+
         public GameObject CreateTownHall(Vector3 position, float sizeInCells)
         {
             if (_profile != null && _profile.TryGetTownHall(out var entry))
@@ -154,7 +190,8 @@ namespace DestinyTogether.Presentation
             }
         }
 
-        private EntityView CreateFromPrefab(string name, in VisualEntry entry, Vector3 position, Color tint)
+        private EntityView CreateFromPrefab(string name, in VisualEntry entry, Vector3 position,
+                                            Color? tintOverride)
         {
             var root = new GameObject(name);
             root.transform.SetParent(_root, false);
@@ -168,12 +205,15 @@ namespace DestinyTogether.Presentation
             var art = Object.Instantiate(entry.Prefab, visual.transform);
             VisualFitter.Fit(art, entry);
 
-            // O flash de dano precisa VOLTAR para a cor do artista, não para a do placeholder.
-            // Ler a cor base do material comprado é o que impede o feedback de "consertar" a peça
-            // com a paleta errada na primeira vez que ela leva dano.
+            if (tintOverride.HasValue) ApplyOwnerTint(art, tintOverride.Value);
+
+            // O flash de dano precisa VOLTAR para a cor certa: a do dono quando há uma, a do
+            // artista quando não há. Ler a cor base do material comprado é o que impede o
+            // feedback de "consertar" a peça com a paleta errada na primeira vez que leva dano.
             var renderer = art.GetComponentInChildren<Renderer>();
-            var baseColor = Color.white;
-            if (renderer != null && renderer.sharedMaterial != null &&
+            var baseColor = tintOverride ?? Color.white;
+
+            if (!tintOverride.HasValue && renderer != null && renderer.sharedMaterial != null &&
                 renderer.sharedMaterial.HasProperty(ShaderIds.BaseColor))
                 baseColor = renderer.sharedMaterial.GetColor(ShaderIds.BaseColor);
 

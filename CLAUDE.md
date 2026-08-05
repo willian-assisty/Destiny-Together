@@ -32,7 +32,7 @@ Para iterar rápido sem passar pelo menu, marque **`Pular Menu`** no componente 
 | `1`-`8` | seleciona carta da mão · clique ergue · botão direito cancela |
 | `R` | marca Pronto — antecipa a noite (ao terceiro Pronto o Dia trava em 20s) |
 | `1`-`3` | escolhe a carta do draft quando há uma pendente · `Q` rerrola |
-| scroll | zoom |
+| scroll | zoom (18 a 25 unidades — faixa curta de propósito) |
 | `ESC` | pausa (continuar / reiniciar / menu) |
 | `F1` | painel de teste |
 
@@ -181,8 +181,39 @@ atira longe, octógono congela, retangular empurra: três formas distintas para 
 distintos, legíveis de cima e no escuro. Casa civil nunca vira torre, porque casa não deve parecer
 que atira. Para trocar qualquer escolha: `Destiny Together > Mapear arte importada`.
 
-Monstros e heróis continuam em primitivas até a arte deles chegar. Definição sem prefab cai para
-primitiva sozinha — nunca existe um estado "meio migrado" em que o jogo não abre.
+Monstros continuam em primitivas até a arte deles chegar. Definição sem prefab cai para primitiva
+sozinha — nunca existe um estado "meio migrado" em que o jogo não abre.
+
+### Personagens
+
+Arte própria do projeto vive em `Assets/_Project/Art/Final/Characters/` — os packs de loja ficam
+na raiz de `Assets/`, e a separação é intencional: reimportar um `.unitypackage` não pode pisar no
+que é nosso.
+
+Para adicionar um personagem: solte o FBX na pasta e acrescente uma linha na tabela `Heroes` do
+`ArtSetup`. **Não edite o `VisualsProfile` à mão** — `Apply()` limpa `Entries` e reconstrói, então
+mapeamento feito no inspector some no próximo setup.
+
+Três regras que a primeira importação (Azure Sentinel → Guarda) estabeleceu:
+
+- **Altura manda, largura não.** Para prédio, `TargetCells` (largura) é o valor que controla; para
+  personagem é `MaxHeightCells`. O motivo é a pose: medido, o modelo tem 1,90 de envergadura por
+  1,40 de altura — T-pose. Normalizar pela largura faria um personagem em T sair baixinho e, no
+  dia em que fosse riggado com os braços ao lado do corpo, crescer sozinho. Deixe `TargetCells`
+  folgado (3.0) e a altura em **1,7 células** — casa com as cápsulas de placeholder e ocupa ~12%
+  da tela na câmera atual.
+- **Sem correção de eixo.** Ao contrário do Polylised, o FBX do personagem já traz
+  `Lcl Rotation (-90, 0, 0)` no próprio nó e o Unity aplica sozinho. Rodar de novo o deitaria.
+- **A cor é do assento, não do modelo.** `ViewFactory.ApplyOwnerTint` carimba a cor do jogador na
+  arte importada. Com quatro heróis usando a mesma malha, "de quem é esse" some se o modelo mandar
+  na cor — e isso é regra de leitura, não decoração. De quebra cobre o modelo que chega **sem
+  material**: em URP um renderer sem material desenha magenta, e atribuir o material de
+  placeholder resolve as duas coisas de uma vez.
+
+`OnPreprocessModel` no `ArtSetup` aplica os import settings (sem material, sem animação, sem
+blendshape) para qualquer FBX dessa pasta. Fica em código e não no `.meta` porque `.meta` é gerado
+pelo editor: arquivo largado na pasta chega sem ele, e "esqueci de conferir o inspector" é o modo
+de falha mais comum de pipeline de arte.
 
 **Materiais.** Os packs vêm com shader built-in; num projeto URP isso renderiza magenta.
 `UrpMaterialUpgrader` converte para `URP/Lit` preservando cor, albedo, normal e emissão. Ele
@@ -216,6 +247,18 @@ floresta simplesmente não aparece.
 da textura, com o offset de UV compensando o deslocamento — senão o terreno desliza sob os pés, que
 é o artefato clássico de chão que persegue a câmera. Chão por chunk custaria centenas de objetos
 para desenhar uma superfície plana.
+
+**Câmera.** Perspectiva com **FOV 35**, pitch 50°, yaw 45°, distância 18–25. FOV baixo é a peça
+central: perto o bastante de uma projeção paralela para que duas torres iguais pareçam iguais em
+pontos diferentes da tela (o que uma grade precisa), e longe o bastante para que peça alta ainda
+projete silhueta (o que a gramática de placeholder precisa). Ortográfica pura mataria a segunda
+metade.
+
+O enquadramento é de **corpo, não de tabuleiro**: em 16:9 no zoom máximo a tela cobre ~±10 células
+de profundidade e ~±14 de largura, e o tabuleiro entra girado 45° com meia-diagonal ~14,9 — quase
+cabe, faltando um pouco na profundidade. Consequência de design a acompanhar no playtest: a
+leitura **global** das oito Faixas passa a ser do painel da Bússola no HUD, e os pilares viram
+indicador **local** — você enxerga o do lado que está defendendo, não os oito de uma vez.
 
 **Escala.** `VisualFitter` mede os bounds reais e normaliza para `TargetCells`, base no chão,
 centro em XZ. É por isso que packs em escalas diferentes convivem sem ninguém tocar em import

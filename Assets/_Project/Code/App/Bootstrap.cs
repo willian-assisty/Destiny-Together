@@ -94,8 +94,11 @@ namespace DestinyTogether.App
             var camGo = new GameObject("Camera Iso");
             camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
-            cam.farClipPlane = 200f;
+            // O far plane precisa passar do alcance de visao diurno (~140 unidades com nevoa em
+            // 0.010), senao o mundo procedural seria cortado por um plano em vez de pela nevoa.
+            cam.farClipPlane = 260f;
             camGo.AddComponent<AudioListener>();
+            // CameraRig escreve projecao e FOV no Awake, que dispara neste AddComponent.
             _camera = camGo.AddComponent<CameraRig>();
 
             var lightGo = new GameObject("Sol");

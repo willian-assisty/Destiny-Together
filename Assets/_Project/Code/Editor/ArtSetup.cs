@@ -31,6 +31,29 @@ namespace DestinyTogether.EditorTools
         private const string City = "Assets/Polylised - Medieval Desert City/Prefabs/";
         private const string Forest = "Assets/Fantasy Forest Environment Free Sample/";
 
+        /// <summary>Arte própria do projeto, ao contrário dos packs de loja que ficam na raiz.</summary>
+        public const string CharacterFolder = "Assets/_Project/Art/Final/Characters/";
+
+        /// <summary>
+        /// (classe de herói, malha, largura em células, teto de altura em células)
+        ///
+        /// Herói é o único caso em que o teto de altura é o valor que MANDA, e a razão é a pose:
+        /// medido, o Azure Sentinel tem 1,90 de envergadura por 1,40 de altura — braços abertos
+        /// em T. Normalizar pela largura faria um personagem em T-pose sair baixinho e, no dia em
+        /// que ele for riggado com os braços ao lado do corpo, crescer sozinho. Com a altura
+        /// mandando (largura folgada de propósito), a estatura fica constante em qualquer pose,
+        /// que é o que um personagem precisa e um prédio não.
+        ///
+        /// 1,7 célula casa com as cápsulas de placeholder (1,4-1,6) e ocupa ~12% da altura da
+        /// tela na câmera atual (FOV 35 a 22 unidades).
+        /// </summary>
+        private static readonly (string def, string path, float cells, float maxHeight)[] Heroes =
+        {
+            // "Azure Sentinel" -> Guarda: sentinela é quem segura a Linha, e azul já é a cor do
+            // assento 0 na gramática de placeholder. O nome do arquivo casou com o design sozinho.
+            (DefaultContent.Guarda, CharacterFolder + "AzureSentinel.fbx", 3.0f, 1.7f),
+        };
+
         /// <summary>
         /// (definição, prefab, largura em células, teto de altura em células)
         ///
@@ -129,8 +152,9 @@ namespace DestinyTogether.EditorTools
         /// v4: correção de eixo do pack (Z-up) — o pack inteiro entrava deitado.
         /// v5: florestas concentradas nas quatro diagonais, miolo do mapa limpo.
         /// v6: mundo procedural — lista de pedreiras e raio de streaming de cenario.
+        /// v7: primeiro personagem proprio (Azure Sentinel -> Guarda).
         /// </summary>
-        private const int CurrentSetupVersion = 6;
+        private const int CurrentSetupVersion = 7;
 
         private static void TrySetupOnce()
         {
@@ -159,7 +183,8 @@ namespace DestinyTogether.EditorTools
                 foreach (var path in imported)
                 {
                     if (path.StartsWith(City, System.StringComparison.Ordinal) ||
-                        path.StartsWith(Forest, System.StringComparison.Ordinal))
+                        path.StartsWith(Forest, System.StringComparison.Ordinal) ||
+                        path.StartsWith(CharacterFolder, System.StringComparison.Ordinal))
                     {
                         packArrived = true;
                         break;
@@ -169,6 +194,38 @@ namespace DestinyTogether.EditorTools
                 // TrySetupOnce sai cedo se o perfil já existe, então os assets que o próprio
                 // Apply cria não realimentam este callback.
                 if (packArrived) EditorApplication.delayCall += TrySetupOnce;
+            }
+
+            /// <summary>
+            /// Ajustes de import dos personagens, aplicados na primeira vez que o FBX entra.
+            ///
+            /// Existem aqui e não no .meta porque .meta é gerado pelo editor: um arquivo largado
+            /// na pasta chega sem ele, e "esqueci de conferir o inspector" é o modo de falha mais
+            /// comum de pipeline de arte. Escrever a regra em código a torna válida para o
+            /// próximo personagem também.
+            /// </summary>
+            private void OnPreprocessModel()
+            {
+                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (assetImporter is not ModelImporter importer) return;
+
+                // A malha do Meshy não traz material, textura, esqueleto nem animação. Importar
+                // materiais criaria um .mat vazio por peça; a cor vem do assento do jogador, que
+                // é informação de jogo e não decoração.
+                importer.materialImportMode = ModelImporterMaterialImportMode.None;
+                importer.importAnimation = false;
+                importer.animationType = ModelImporterAnimationType.None;
+                importer.importCameras = false;
+                importer.importLights = false;
+                importer.importVisibility = false;
+
+                // Escala e altura são resolvidas em runtime pelo VisualFitter, medindo bounds —
+                // mexer no fator aqui só criaria dois lugares que decidem tamanho.
+                importer.isReadable = false;
+                importer.importBlendShapes = false;
+                importer.weldVertices = true;
+                importer.optimizeMeshPolygons = true;
+                importer.optimizeMeshVertices = true;
             }
         }
 
@@ -200,6 +257,17 @@ namespace DestinyTogether.EditorTools
                 var entry = VisualEntry.Create(def, prefab, cells, maxHeight);
                 entry.EulerAngles = PolylisedUpright;
                 visuals.Entries.Add(entry);
+                mapped++;
+            }
+
+            // Heróis. Sem correção de eixo: ao contrário do Polylised, o FBX do personagem já traz
+            // Lcl Rotation (-90, 0, 0) no próprio nó, e o Unity aplica isso sozinho no import.
+            // Rodar de novo aqui o deitaria.
+            foreach (var (def, path, cells, maxHeight) in Heroes)
+            {
+                var mesh = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (mesh == null) { missing.Add(path); continue; }
+                visuals.Entries.Add(VisualEntry.Create(def, mesh, cells, maxHeight));
                 mapped++;
             }
 
