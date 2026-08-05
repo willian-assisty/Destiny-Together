@@ -25,21 +25,40 @@ namespace DestinyTogether.Presentation
         /// entardecer ser continuo em vez de um corte entre dois estados.
         /// </summary>
         public static void Apply(AtmosphereProfile profile, Camera camera, Light sun, float nightAmount)
+            => Apply(profile, camera, sun, nightAmount, DayNightCycle.Sun(null));
+
+        /// <summary>
+        /// Aplica o clima com o sol posicionado pelo arco do dia.
+        ///
+        /// A ordem das misturas importa: o alaranjado entra na cor DE DIA e só depois o resultado
+        /// é interpolado para a noite. Assim o poente escurece PARA a noite em vez de disputar com
+        /// ela — se o laranja fosse aplicado por último, ele reacenderia o céu já escuro.
+        /// </summary>
+        public static void Apply(AtmosphereProfile profile, Camera camera, Light sun, float nightAmount,
+                                 DayNightCycle.SunOrientation orientation)
         {
             if (profile == null) return;
 
             float n = Mathf.Clamp01(nightAmount);
+            float horizon = Mathf.Clamp01(orientation.Horizon01);
 
             if (sun != null)
             {
-                sun.color = Color.Lerp(profile.DaySunColor, profile.SunColor, n);
-                sun.intensity = Mathf.Lerp(profile.DaySunIntensity, profile.SunIntensity, n);
+                var daySunColor = Color.Lerp(profile.DaySunColor, profile.HorizonSunColor, horizon);
+                sun.color = Color.Lerp(daySunColor, profile.SunColor, n);
 
-                // O sol DESCE ao longo do entardecer. Sombras que se alongam sao a leitura mais
-                // antiga que existe de "esta ficando tarde", e ela nao ocupa HUD nenhum.
-                var angles = profile.SunAngles;
-                angles.x = DayNightCycle.SunPitch(n);
-                sun.transform.rotation = Quaternion.Euler(angles);
+                // Sol rente atravessa mais ar e chega mais fraco. Sem essa queda o meio-dia e o
+                // amanhecer teriam a mesma força e só mudariam de cor, que lê como filtro.
+                float dayIntensity = profile.DaySunIntensity * Mathf.Lerp(1f, 0.72f, horizon);
+                sun.intensity = Mathf.Lerp(dayIntensity, profile.SunIntensity, n);
+
+                // NASCE de um lado e SE PÕE do outro, varrendo o céu ao longo dos 5 minutos. A
+                // elevação e o azimute vêm do relógio da fase; o Y do perfil diz só onde fica o
+                // meio-dia. Sombras que giram e se alongam são a leitura mais antiga que existe de
+                // "está ficando tarde", e não ocupam HUD nenhum.
+                sun.transform.rotation = Quaternion.Euler(orientation.Elevation,
+                                                          profile.SunAngles.y + orientation.AzimuthFromNoon,
+                                                          profile.SunAngles.z);
 
                 sun.shadows = profile.SunShadows ? LightShadows.Soft : LightShadows.None;
                 sun.shadowStrength = Mathf.Lerp(profile.DayShadowStrength, profile.ShadowStrength, n);
@@ -48,7 +67,10 @@ namespace DestinyTogether.Presentation
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = Color.Lerp(profile.DayAmbientColor, profile.AmbientColor, n);
 
-            var fogColor = Color.Lerp(profile.DayFogColor, profile.FogColor, n);
+            // A névoa esquenta menos que o sol (0,75): ar totalmente laranja engoliria a silhueta
+            // das peças, e silhueta é a gramática de leitura do jogo inteiro.
+            var dayFogColor = Color.Lerp(profile.DayFogColor, profile.HorizonFogColor, horizon * 0.75f);
+            var fogColor = Color.Lerp(dayFogColor, profile.FogColor, n);
 
             RenderSettings.fog = profile.FogEnabled;
             RenderSettings.fogColor = fogColor;

@@ -225,12 +225,21 @@ namespace DestinyTogether.Data
 
         // ------------------------------------------------------------------------------
         // HEROIS — placeholder e cor + primitiva, mas a FUNCAO ja e distinta desde o dia 1.
+        //
+        // O nome que aparece no menu descreve o PERSONAGEM que o jogador ve, nao a classe interna.
+        // Enquanto todo mundo era capsula colorida os dois podiam ser a mesma palavra; com arte de
+        // verdade em tela, "Arauto" em cima de um arqueiro faz o menu mentir.
+        //
+        // A constante (Guarda, Arauto, ...) NAO muda junto: DefId vem do hash dela, entao renomear
+        // a constante invalidaria replay e conteudo salvo. DisplayName e so a etiqueta — trocar
+        // custa zero e e exatamente por isso que as duas coisas sao separadas.
         // ------------------------------------------------------------------------------
         private void BuildHeroes()
         {
             AddHero(new HeroSpec
             {
-                Id = Def(Guarda), DisplayName = "Guarda", Class = HeroClass.Guarda,
+                // Azure Sentinel: sentinela e quem segura a Linha. Mesmo papel, nome do modelo.
+                Id = Def(Guarda), DisplayName = "Sentinela", Class = HeroClass.Guarda,
                 MoveSpeed = 7.0f, MaxHealth = 130f, AttackDamage = 14f, AttackRadius = 2.9f,
                 AttackInterval = 0.45f, CarryCapacity = 10f
             });
@@ -252,7 +261,9 @@ namespace DestinyTogether.Data
 
             AddHero(new HeroSpec
             {
-                Id = Def(Arauto), DisplayName = "Arauto", Class = HeroClass.Arauto,
+                // O de maior alcance, o mais rapido e o mais fragil: o kit e o de um arqueiro, e
+                // agora a arte tambem e. "Arauto" descrevia a velocidade e nada mais.
+                Id = Def(Arauto), DisplayName = "Arqueiro", Class = HeroClass.Arauto,
                 MoveSpeed = 8.8f, MaxHealth = 85f, AttackDamage = 9f, AttackRadius = 3.6f,
                 AttackInterval = 0.35f, CarryCapacity = 10f
             });

@@ -26,6 +26,17 @@ namespace DestinyTogether.Presentation
         /// <summary>Teto de chunks desenhados. Rede de seguranca contra um raio mal configurado.</summary>
         private const int MaxChunks = 400;
 
+        /// <summary>
+        /// Props materializados por frame.
+        ///
+        /// Com mata fechada, atravessar uma fronteira de chunk pede uma FILEIRA inteira de chunks
+        /// de uma vez — em floresta densa isso passa de mil arvores no mesmo frame, e o jogo
+        /// tranca por um instante exatamente quando o jogador esta correndo. Espalhar o trabalho
+        /// troca o engasgo por algumas arvores aparecendo na borda da tela, que e o lado certo da
+        /// troca: a borda esta longe e em nevoa, o engasgo esta debaixo da mao do jogador.
+        /// </summary>
+        private const int PropsPerFrame = 300;
+
         private readonly Transform _root;
         private readonly VisualsProfile _profile;
         private readonly PlaceholderFactory _placeholders;
@@ -37,10 +48,14 @@ namespace DestinyTogether.Presentation
         private readonly ChunkContent _content = new ChunkContent();
         private readonly List<long> _toRemove = new List<long>(32);
 
+        /// <summary>Chunks pedidos e ainda nao desenhados, do mais perto para o mais longe.</summary>
+        private readonly List<long> _queue = new List<long>(128);
+
         private int _lastChunkX = int.MinValue;
         private int _lastChunkZ = int.MinValue;
 
         public int LoadedChunkCount => _chunks.Count;
+        public int PendingChunkCount => _queue.Count;
 
         public WorldPropStreamer(Transform parent, VisualsProfile profile, PlaceholderFactory placeholders,
                                  ArenaSpec arena, Vec2 cityCenter, int seed)
@@ -66,22 +81,48 @@ namespace DestinyTogether.Presentation
             int radius = _profile != null ? Mathf.Clamp(_profile.PropRadiusChunks, 2, 10) : 5;
 
             WorldGen.ChunkOf(focus, out int cx, out int cz);
-            if (cx == _lastChunkX && cz == _lastChunkZ) return;
-            _lastChunkX = cx;
-            _lastChunkZ = cz;
+
+            if (cx != _lastChunkX || cz != _lastChunkZ)
+            {
+                _lastChunkX = cx;
+                _lastChunkZ = cz;
+                Reschedule(cx, cz, radius);
+                Unload(cx, cz, radius + Hysteresis);
+            }
+
+            DrainQueue();
+        }
+
+        /// <summary>Refaz a fila do que falta, do mais perto para o mais longe.</summary>
+        private void Reschedule(int cx, int cz, int radius)
+        {
+            _queue.Clear();
 
             for (int dz = -radius; dz <= radius; dz++)
             {
                 for (int dx = -radius; dx <= radius; dx++)
                 {
-                    if (_chunks.Count >= MaxChunks) break;
                     long key = WorldGen.KeyOf(cx + dx, cz + dz);
-                    if (_chunks.ContainsKey(key)) continue;
-                    Build(cx + dx, cz + dz, key);
+                    if (!_chunks.ContainsKey(key)) _queue.Add(key);
                 }
             }
 
-            int keep = radius + Hysteresis;
+            // Mais LONGE primeiro na lista, porque o consumo tira do fim: assim o proximo a ser
+            // desenhado e sempre o mais perto, sem custar uma copia do vetor por chunk. Se o
+            // orcamento nao der para tudo, o que aparece antes e o que esta debaixo do nariz do
+            // jogador, nao o canto da tela.
+            _queue.Sort((a, b) =>
+            {
+                Decode(a, out int ax, out int az);
+                Decode(b, out int bx, out int bz);
+                int da = (ax - cx) * (ax - cx) + (az - cz) * (az - cz);
+                int db = (bx - cx) * (bx - cx) + (bz - cz) * (bz - cz);
+                return db.CompareTo(da);
+            });
+        }
+
+        private void Unload(int cx, int cz, int keep)
+        {
             _toRemove.Clear();
             foreach (var pair in _chunks)
             {
@@ -96,7 +137,25 @@ namespace DestinyTogether.Presentation
             }
         }
 
-        private void Build(int cx, int cz, long key)
+        /// <summary>
+        /// Gasta o orcamento do frame. Um chunk e sempre desenhado INTEIRO — parti-lo daria meia
+        /// floresta em tela, que le como bug e nao como carregamento.
+        /// </summary>
+        private void DrainQueue()
+        {
+            int budget = PropsPerFrame;
+
+            while (_queue.Count > 0 && budget > 0 && _chunks.Count < MaxChunks)
+            {
+                long key = _queue[_queue.Count - 1];
+                _queue.RemoveAt(_queue.Count - 1);
+
+                Decode(key, out int cx, out int cz);
+                budget -= Build(cx, cz, key);
+            }
+        }
+
+        private int Build(int cx, int cz, long key)
         {
             WorldGen.Generate(_seed, cx, cz, _arena, _cityCenter, _content);
 
@@ -104,15 +163,15 @@ namespace DestinyTogether.Presentation
             container.SetParent(_root, false);
             _chunks[key] = container;
 
-            if (_content.Props.Count == 0) return;
-
             for (int i = 0; i < _content.Props.Count; i++)
                 Spawn(_content.Props[i], container);
+
+            return _content.Props.Count;
         }
 
         private void Spawn(in WorldProp prop, Transform parent)
         {
-            var prefab = PickPrefab(prop.Kind);
+            var prefab = PickPrefab(prop.Kind, prop.Variant);
 
             var holder = new GameObject("P");
             holder.transform.SetParent(parent, false);
@@ -141,7 +200,13 @@ namespace DestinyTogether.Presentation
             });
         }
 
-        private GameObject PickPrefab(WorldPropKind kind)
+        /// <summary>
+        /// A malha de um prop. A escolha vem da VARIANTE que o gerador sorteou, nao de um hash do
+        /// tipo — antes, todo prop do mesmo tipo desenhava a mesma malha, entao importar cinco
+        /// arvores diferentes teria produzido uma floresta com duas. Como a variante e funcao pura
+        /// da semente, a mata continua identica ao voltar e igual entre os quatro clientes.
+        /// </summary>
+        private GameObject PickPrefab(WorldPropKind kind, int variant)
         {
             if (_profile == null) return null;
 
@@ -151,11 +216,7 @@ namespace DestinyTogether.Presentation
 
             if (list == null || list.Count == 0) return null;
 
-            // Escolha estavel por tipo e nao por sorteio: reconstruir o mesmo chunk tem de dar a
-            // mesma floresta, senao voltar sobre os proprios passos mostra outra mata.
-            int index = ((int)kind * 2654435761u).GetHashCode();
-            index = Mathf.Abs(index) % list.Count;
-            return list[index];
+            return list[(variant & 0x7FFFFFFF) % list.Count];
         }
 
         private static VisualStyle FallbackStyle(WorldPropKind kind, float scale) => kind switch

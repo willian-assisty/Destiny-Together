@@ -190,6 +190,25 @@ que atira. Para trocar qualquer escolha: `Destiny Together > Mapear arte importa
 Monstros continuam em primitivas até a arte deles chegar. Definição sem prefab cai para primitiva
 sozinha — nunca existe um estado "meio migrado" em que o jogo não abre.
 
+### Cenário próprio
+
+`Assets/_Project/Art/Final/Nature/<Nome>/` — a mesma estrutura de um personagem, sem esqueleto:
+`<Nome>.fbx` mais `Textures/<Nome>_BaseColor|_Normal|_Metallic|_Roughness.png`. Uma linha na tabela
+`Trees` do `ArtSetup` e a peça entra na mata; a ordem da tabela importa, porque a variante sorteada
+indexa a lista e as nossas ficam na frente das do pack.
+
+O montador é o mesmo dos personagens (`CharacterSetup`), com a lista de clipes vazia — a operação é
+idêntica (FBX texturizado vira peça jogável) e manter dois montadores quase iguais custaria a
+próxima correção ser feita só em um deles.
+
+Texturas de natureza entram em **1024**, metade de um personagem: a árvore ocupa 2 células numa tela
+de ~28 e existem **milhares** dela em memória ao mesmo tempo. Num personagem a textura é o rosto do
+jogo; numa árvore de mata fechada é uma mancha de cor dentro da névoa.
+
+Os `.zip` de origem do Meshy ficam em `ArtSource/` na raiz do projeto — **fora de `Assets/`**, senão
+o Unity indexa centenas de MB de arquivo que ele não sabe ler, e fora do git, porque o que importa é
+o extraído em `Art/Final/`.
+
 ### Personagens
 
 Arte própria do projeto vive em `Assets/_Project/Art/Final/Characters/` — os packs de loja ficam
@@ -203,8 +222,61 @@ para saber o que é malha, o que é clipe e o que é textura:
 Characters/<Nome>/
     <Nome>.fbx              malha riggada  (o nome IGUAL ao da pasta = é a malha)
     <Nome>_Run.fbx          clipe          (qualquer outro FBX na pasta = é clipe)
-    Textures/<Nome>_BaseColor|_Normal|_Metallic|_Roughness.png
+    Textures/<Nome>_BaseColor|_Normal|_Metallic|_Emissive.png ou .jpg
 ```
+
+**Formato: FBX, não GLB.** O Unity **não importa `.glb`** — nem nativamente, nem sem instalar um
+pacote de glTF. E mesmo com o pacote, todo o pipeline daqui é `ModelImporter` (avatar, clipes,
+configuração de import), coisa que importador de glTF não expõe: adotar GLB significaria manter
+duas pipelines para a mesma coisa.
+
+Personagem que chegar em GLB **converte na entrada**, e aí a pipeline continua sendo uma só:
+
+```powershell
+python .\Tools\GlbToFbx\glb2fbx.py entrada.glb Assets\_Project\Art\Final\Characters\Nome Nome Run
+```
+
+Saem `Nome.fbx` (malha + esqueleto + skin) e `Nome_Run.fbx` (**só** esqueleto + curvas — o clipe
+liga por caminho de transform, então levar os vértices junto custaria 12 MB por clipe sem mudar um
+quadro). Ver `Tools/GlbToFbx/README.md` para o que a conversão garante e por quê.
+
+**Confira pelo gabarito, não pela vibe.** O conversor imprime a posição de alguns ossos calculada
+direto do GLB, e `Destiny Together > Diagnosticar personagens` imprime os mesmos números depois do
+import. É a única prova de que a conversão saiu certa: um erro de ordem de rotação ainda produz um
+clipe que "anima", com ossos girando e caminhos casando — só que na pose errada. Medido no
+Arqueiro, Y e Z batem exatamente e X vem negado, que é a conversão destro→canhoto que o Unity
+aplica a todo FBX (igual para malha e clipe, e portanto invisível).
+
+**Malha sem esqueleto não ganha Animator.** `CharacterSetup` procura `.fbx` e depois `.obj`, e
+quando não há clipe nenhum ele *remove* o Animator do prefab em vez de deixá-lo vazio: Animator
+sem controlador ainda assume as transformações e congela o corpo na pose de bind — apagando até a
+locomoção procedural que serviria de plano B. Sem Animator, o plano B volta a valer.
+
+**"Sem clipe" e "clipe ainda não importado" são estados diferentes, e confundi-los custou a corrida
+do primeiro personagem.** O setup roda de dentro de um postprocessador de import, então o FBX de
+animação pode não ter sido processado quando a pergunta é feita. Tratar isso como "não tem animação"
+gravava um prefab sem Animator — e como o gate de versão já estava satisfeito, ele nunca mais era
+reconstruído: a animação sumia em definitivo, sem um único erro no console. Por isso a pergunta é
+feita ao **disco** (`File.Exists`) e não ao `AssetDatabase`; arquivo presente e clipe ausente força
+reimport, e se ainda assim falhar o Animator **fica** e o erro é logado. O gate agora também
+**verifica o resultado** (`RigIsBroken`) em vez de confiar no número, porque versão é boa para "o
+setup mudou" e péssima para "o setup falhou".
+
+**Postprocessador é palpite; setup é garantia** — e o Arqueiro mostrou uma segunda cara da mesma
+regra. `OnPreprocessModel` roda ANTES de o arquivo ser lido: na primeira passada `transformPaths`
+vem **vazio** e o avatar do personagem ainda não existe. Ler vazio como "malha estática" importava
+o herói sem esqueleto e o clipe sem curva, e gravava um `.meta` dizendo "estático" que nunca mais
+era revisto. Agora vazio significa "ainda não sei" (para FBX de personagem, a resposta segura é
+"tem esqueleto"), e `CharacterSetup.EnsureRig` **corrige e reimporta** depois — ali o arquivo já foi
+lido, então a pergunta tem resposta. Quem chama diz se espera animação: uma árvore passa lista de
+clipes vazia, um herói passa `{"Run"}`. Sem esse discriminador o mesmo montador forçaria rig Generic
+e um Avatar em cada tronco da floresta.
+
+`Destiny Together > Diagnosticar personagens` imprime o estado de import, quantos caminhos de curva
+do clipe casam com a hierarquia do prefab e — amostrando o clipe — quanto o corpo **realmente** se
+mexe e quanto o quadril deriva. Foi ele que provou que o rig estava correto quando a leitura do YAML
+sugeria o contrário: 25 caminhos, 0 sem correspondência, 107° de rotação de osso. Nada disso aparece
+no inspector lado a lado, e diagnosticar animação lendo `.meta` é adivinhação.
 
 Para adicionar um personagem: extraia nessa estrutura e acrescente uma linha na tabela `Heroes` do
 `ArtSetup`. Para adicionar um clipe: solte o FBX como `<Nome>_<Clipe>.fbx` e acrescente o sufixo em
@@ -272,13 +344,67 @@ atravessá-lo custar coragem. `FogDensity` noturna acima de ~0.05 começa a apag
 Faixa, que são a telegrafia da ameaça — clima que esconde informação de jogo sai caro.
 
 **O céu é HUD.** O clarear do amanhecer começa exatamente quando os monstros param de nascer
-(`SpawnCutoffBeforeDawn`), e o sol desce ao longo do entardecer. Isso é deliberado: "última onda
-já entrou" e "está clareando" são a mesma informação, dita uma vez só, sem ocupar tela.
+(`SpawnCutoffBeforeDawn`). Isso é deliberado: "última onda já entrou" e "está clareando" são a mesma
+informação, dita uma vez só, sem ocupar tela.
+
+**O sol atravessa o céu, e o relógio dele não é o da luz.** `DayNightCycle.Sun` é dirigido pelo
+**progresso da fase**; `NightAmount` continua dirigindo a escuridão. São coisas diferentes e
+precisavam ser separadas: `NightAmount` fica em zero nos primeiros 70% do Dia — é o que mantém o
+mapa claro e seguro — então um sol preso a ela ficava **parado** no mesmo ponto do céu por três
+minutos e meio e depois despencava.
+
+Ele nasce à direita da tela, varre 180° e se põe à esquerda dentro dos 5 minutos; a Noite completa
+a volta por baixo. A elevação segue um seno (rente nas pontas, a pino no meio) e as duas fases
+começam e terminam em `HorizonElevation`, então a emenda entre Dia e Noite é contínua — não existe
+um quadro em que o sol salta. `SunAngles.y` diz só onde fica o **meio-dia**: 45° casa com o yaw da
+câmera, o que põe o sol atrás de quem olha ao meio-dia (luz frontal, que é o que um jogo visto de
+cima quer) e a 90° do eixo da câmera nas pontas do dia, de onde vem a luz rasante.
+
+`HorizonElevation` é 8° e não 0: a 0 grau a sombra tende ao infinito e o mapa inteiro vira uma
+mancha escura, que lê como bug de iluminação e não como manhã.
+
+O alaranjado entra na cor **de dia** e só depois o resultado é interpolado para a noite — se fosse
+aplicado por último, reacenderia um céu já escuro. A névoa esquenta menos que o sol (0,75): ar
+totalmente laranja engoliria a silhueta das peças, e silhueta é a gramática de leitura do jogo
+inteiro.
 
 **O mundo procedural.** `WorldPropStreamer` desenha florestas e pedreiras em volta de quem está
 olhando e apaga o que ficou para trás, chamando `WorldGen` direto — sem passar pela simulação. Os
 dois streamers têm raios diferentes de propósito: a simulação materializa o que dá para **tocar**
 (`WorldStreamRadiusChunks`, 4 chunks), a tela o que dá para **ver** (`PropRadiusChunks`, 5).
+
+A simulação pede `includeProps: false`: cenário não é entidade, e ela nunca tocou num prop. Isso só
+é seguro porque mata e Esconderijos têm **sorteios independentes** — antes dividiam um `Rng`, e
+mexer na densidade da floresta movia todos os Esconderijos do mundo, levando o balanceamento medido
+junto.
+
+**Mata fechada é contraste, não volume.** O teto é 120 candidatos por chunk de 24×24 (uma árvore a
+cada ~2,2 células no núcleo), mas a média medida fica em 37: o `Ramp` passa por um smoothstep que
+**afasta os dois extremos** — borda de bosque afina, núcleo fecha. Sem ele, subir o teto engrossaria
+o mundo inteiro por igual, e mundo uniformemente denso não tem para onde explorar. Medido em 616
+chunks: pico 120, 25% de mata fechada, 16% de clareira.
+
+Um **cinturão nas quatro diagonais** emoldura a vila logo depois da clareira (`CornerForest`, 140
+células). Nas diagonais e não nos eixos: a horda vem do anel inteiro e os pilares de Faixa são a
+telegrafia da ameaça — emoldurar é bom, tapar informação de jogo não. O cinturão é **só cenário**;
+`GenerateSpawns` usa a densidade pura, senão a vila ganharia um campo de madeira encostado nela e a
+regra "nada perto de casa rende com o tempo" iria pelo ralo.
+
+**Qual malha desenhar vem da variante, não do tipo.** `WorldProp.Variant` sai do gerador. Quando a
+escolha era um hash do `Kind`, todo prop do mesmo tipo desenhava a mesma malha — importar cinco
+árvores teria produzido uma floresta com duas. Como a variante é função pura da semente, a mata
+continua idêntica ao voltar e igual entre os quatro clientes.
+
+Com mata fechada, atravessar uma fronteira de chunk pede uma **fileira inteira** de chunks de uma
+vez, o que passa de mil árvores no mesmo frame. O streamer gasta um orçamento (`PropsPerFrame`, 300)
+e desenha do mais perto para o mais longe: troca o engasgo por algumas árvores aparecendo na borda
+da tela, que é o lado certo da troca — a borda está longe e em névoa, o engasgo está debaixo da mão
+do jogador. Os materiais de árvore ligam **instancing de GPU**; sem isso cada árvore vira uma
+chamada de desenho e a floresta fica cara pelo motivo errado (CPU, não pixels).
+
+Se ficar pesado, os dois botões são `PropRadiusChunks` (quantos chunks aparecem) e
+`MaxPropsPerChunk` (quão fechado é o núcleo) — nessa ordem, porque o primeiro é linear na contagem
+de objetos e não muda o desenho do mundo.
 
 Sem os packs de arte a mata continua existindo, em primitivas com a mesma gramática de silhueta —
 cone escuro é pinheiro, octaedro cinza é rocha. Nunca há um estado "meio migrado" em que a
@@ -316,16 +442,22 @@ Jogável solo com placeholders: 5 noites, ciclo Dia/Noite de 5+5 min, **mundo pr
 10 prédios, 6 arquétipos de monstro + kaiju, 4 classes de herói, Esconderijos da mata, Ruas,
 Distritos, draft, Escombros, Túmulos, Urnas.
 
+Arte própria em campo: **Sentinela** e **Arqueiro** como heróis, os dois riggados e com ciclo de
+corrida (o Arqueiro veio em GLB e entra pelo conversor); **cinco árvores** compondo a mata. O nome que aparece no menu descreve o personagem
+que o jogador vê, não a classe interna — enquanto todos eram cápsula colorida os dois podiam ser a
+mesma palavra, mas "Arauto" em cima de um arqueiro faz o menu mentir. A constante do `DefaultContent`
+não muda junto: `DefId` vem do hash dela, e renomeá-la invalidaria replay.
+
 **Balanceamento medido** (`.\Tools\Headless\run.ps1`, 8 seeds, jogo competente):
 
 | | noite alcançada de 5 | nível de cidade |
 |---|---:|---:|
 | 1 jogador | 1,8 | 4,8 |
-| 2 jogadores | 2,5 | 7,1 |
-| 4 jogadores | **4,5** | 10,3 |
-| 4 jogadores, sem explorar | 4,4 | 9,0 |
+| 2 jogadores | 2,4 | 7,0 |
+| 4 jogadores | **4,6** | 10,4 |
+| 4 jogadores, sem explorar | 4,5 | 9,0 |
 
-Explorar vale **+14% de nível de cidade** — o número existe para provar que o sistema de
+Explorar vale **+15% de nível de cidade** — o número existe para provar que o sistema de
 Esconderijos muda uma decisão em vez de decorar o mapa. Ele já esteve em 0% duas vezes (os
 Esconderijos nasciam onde já se colhia; depois nasciam fora do alcance de movimento do herói) e em
 excesso uma vez, quando o mundo infinito fez os batedores recolherem 299 num dia. Refaça a medição

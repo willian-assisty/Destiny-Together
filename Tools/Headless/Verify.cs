@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DestinyTogether.Core;
 using DestinyTogether.Data;
 using DestinyTogether.Sim;
@@ -24,11 +25,70 @@ internal static class Verify
         MundoEDeterminista();
         MundoStreamaESeLembra();
         MundoTemMataEPedreira();
+        SolCruzaOCeu();
         Console.WriteLine(_falhas == 0
             ? "  todos passaram"
             : $"  {_falhas} FALHA(S)");
         Console.WriteLine();
         return _falhas;
+    }
+
+    /// <summary>
+    /// O sol atravessa o ceu ao longo do Dia inteiro, e a emenda com a Noite e continua.
+    ///
+    /// Este teste existe porque a versao anterior parecia certa e nao era: o sol era dirigido pela
+    /// curva de LUZ, que fica em zero nos primeiros 70% do Dia, entao ele ficava parado no mesmo
+    /// ponto do ceu por tres minutos e meio e depois despencava. "Nasce e se poe" e uma afirmacao
+    /// sobre POSICAO ao longo do relogio, e so um teste sobre posicao a pega.
+    /// </summary>
+    private static void SolCruzaOCeu()
+    {
+        var state = new MatchState { PhaseDuration = 300f };
+
+        DayNightCycle.SunOrientation Em(PhaseId fase, float t)
+        {
+            state.Phase = fase;
+            state.PhaseElapsed = t * state.PhaseDuration;
+            return DayNightCycle.Sun(state);
+        }
+
+        var nascer = Em(PhaseId.Dia, 0f);
+        var meioDia = Em(PhaseId.Dia, 0.5f);
+        var poente = Em(PhaseId.Dia, 1f);
+
+        Check(nascer.AzimuthFromNoon < -80f && poente.AzimuthFromNoon > 80f,
+              "o sol nasce de um lado e se poe do outro",
+              $"{nascer.AzimuthFromNoon:0} -> {poente.AzimuthFromNoon:0} graus");
+
+        Check(meioDia.Elevation > nascer.Elevation + 30f && meioDia.Elevation > poente.Elevation + 30f,
+              "ao meio-dia o sol esta bem mais alto que nas pontas",
+              $"{nascer.Elevation:0} / {meioDia.Elevation:0} / {poente.Elevation:0} graus");
+
+        Check(nascer.Horizon01 > 0.95f && poente.Horizon01 > 0.95f && meioDia.Horizon01 < 0.05f,
+              "o alaranjado acende so nas pontas do dia");
+
+        // Nenhum quadro em que o sol salta: o fim do Dia e o comeco da Noite tem de coincidir, e o
+        // fim da Noite tem de coincidir com o nascer do dia seguinte.
+        var noiteInicio = Em(PhaseId.Noite, 0f);
+        var noiteFim = Em(PhaseId.Noite, 1f);
+
+        Check(Math.Abs(noiteInicio.Elevation - poente.Elevation) < 0.01f &&
+              Math.Abs(noiteInicio.AzimuthFromNoon - poente.AzimuthFromNoon) < 0.01f,
+              "a virada do Dia para a Noite e continua — o sol nao salta");
+
+        Check(Math.Abs(noiteFim.Elevation - nascer.Elevation) < 0.01f &&
+              Math.Abs(noiteFim.AzimuthFromNoon - (nascer.AzimuthFromNoon + 360f)) < 0.01f,
+              "a Noite fecha a volta e devolve o sol ao ponto do nascer");
+
+        Check(Em(PhaseId.Noite, 0.5f).Elevation < 0f,
+              "no meio da noite o sol esta abaixo do horizonte");
+
+        // O arco anda o Dia INTEIRO. Se ele ficasse preso a curva de luz, o primeiro terco do dia
+        // teria azimute constante — que era exatamente o defeito.
+        float a25 = Em(PhaseId.Dia, 0.25f).AzimuthFromNoon;
+        Check(a25 > nascer.AzimuthFromNoon + 30f && a25 < meioDia.AzimuthFromNoon - 30f,
+              "o sol ja andou um quarto do arco no primeiro quarto do Dia",
+              $"{a25:0} graus");
     }
 
     private static void Check(bool ok, string label, string detalhe = "")
@@ -257,7 +317,11 @@ internal static class Verify
         var buffer = new ChunkContent();
         var center = new Vec2(10.5f, 10.5f);
 
-        int arvores = 0, pedras = 0, chunksComMata = 0, chunksVazios = 0, total = 0;
+        int arvores = 0, pedras = 0, chunksComMata = 0, chunksVazios = 0, total = 0, pico = 0;
+
+        // Quantas malhas diferentes a mata pede. Se a variante nao variar, cinco arvores
+        // importadas desenham uma floresta com uma — que foi exatamente o bug do hash por tipo.
+        var variantes = new HashSet<int>();
 
         for (int cz = -12; cz <= 12; cz++)
         {
@@ -273,20 +337,30 @@ internal static class Verify
                 {
                     if (prop.Kind is WorldPropKind.Pedra or WorldPropKind.Penhasco) p++;
                     else a++;
+                    variantes.Add(prop.Variant % 5);
                 }
                 arvores += a;
                 pedras += p;
                 if (a + p == 0) chunksVazios++;
-                if (a >= 5) chunksComMata++;
+
+                // Um chunk tem 24x24 = 576 celulas e uma copa ocupa ~3,8. 70 arvores cobrem quase
+                // metade do chao: da para se perder dentro, e ainda da para andar. E este o
+                // numero que "mata fechada" quer dizer — o limiar antigo (5) foi calibrado quando
+                // o teto era 26 e hoje aceitaria um bosque ralo como floresta densa.
+                if (a >= 70) chunksComMata++;
+                if (a > pico) pico = a;
             }
         }
 
-        Console.WriteLine($"  [mundo] {total} chunks: {arvores} arvores, {pedras} pedras, " +
-                          $"{chunksComMata} de mata fechada, {chunksVazios} clareiras");
+        Console.WriteLine($"  [mundo] {total} chunks: {arvores} arvores ({arvores / (float)total:0.0}/chunk, " +
+                          $"pico {pico}), {pedras} pedras, {chunksComMata} de mata fechada, " +
+                          $"{chunksVazios} clareiras, {variantes.Count} malhas pedidas");
 
         Check(arvores > 0 && pedras > 0, "o mundo gera floresta E pedreira");
         Check(chunksVazios > total / 12, "existem clareiras — nao e um borrifo uniforme",
               $"{chunksVazios} de {total}");
+        Check(variantes.Count >= 5, "a mata pede malhas variadas, nao a mesma arvore repetida",
+              $"{variantes.Count} de 5");
         Check(chunksComMata > total / 12, "existem manchas de mata fechada",
               $"{chunksComMata} de {total}");
     }

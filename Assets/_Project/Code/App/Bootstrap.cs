@@ -205,7 +205,8 @@ namespace DestinyTogether.App
             // o entardecer e continuo: se a luz so mudasse quando a fase muda, o jogador seria
             // pego de surpresa por uma noite que ele deveria ter visto chegar.
             AtmosphereApplier.Apply(_atmosphere, _camera != null ? _camera.Camera : null, _sun,
-                                    DayNightCycle.NightAmount(_sim.State, _content.Rules));
+                                    DayNightCycle.NightAmount(_sim.State, _content.Rules),
+                                    DayNightCycle.Sun(_sim.State));
 
             if (_sim.State.Phase != _lastPhase)
             {

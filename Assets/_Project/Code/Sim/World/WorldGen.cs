@@ -20,6 +20,14 @@ namespace DestinyTogether.Sim
         public Vec2 Position;
         public float Yaw;
         public float Scale;
+
+        /// <summary>
+        /// Qual malha da lista desenhar. Sai do gerador, e nao de um sorteio da apresentacao, por
+        /// dois motivos: reconstruir o mesmo chunk tem de dar exatamente a mesma mata (voltar sobre
+        /// os proprios passos nao pode mostrar outra floresta), e no multiplayer os quatro clientes
+        /// precisam ver a mesma arvore no mesmo lugar sem trocar um byte sobre ela.
+        /// </summary>
+        public int Variant;
     }
 
     /// <summary>Um no colhivel ou um Esconderijo que um chunk quer que exista.</summary>
@@ -78,7 +86,22 @@ namespace DestinyTogether.Sim
         private const float ForestThreshold = 0.42f;
         private const float QuarryThreshold = 0.63f;
 
-        private const int MaxPropsPerChunk = 26;
+        /// <summary>
+        /// Candidatos por chunk. Cada um so vira arvore com probabilidade igual a densidade local,
+        /// entao isto e o TETO de um nucleo fechado, nao a media.
+        ///
+        /// 120 num chunk de 24x24 celulas da uma arvore a cada ~2,2 celulas — com copa de 2,2
+        /// celulas, e mata fechada de verdade: da para se perder dentro. O numero so e pagavel
+        /// porque a densidade cai em degrade (ver <see cref="Ramp"/>): a maior parte do mundo fica
+        /// bem abaixo do teto, e clareira continua sendo clareira.
+        /// </summary>
+        private const int MaxPropsPerChunk = 120;
+
+        /// <summary>Ate onde vai o cinturao de mata que emoldura a vila, em celulas.</summary>
+        private const float CornerForestRange = 140f;
+
+        /// <summary>Quanto o cinturao soma na densidade, no pico das diagonais.</summary>
+        private const float CornerForestStrength = 0.62f;
 
         // ------------------------------------------------------------------------------------
         // Coordenadas
@@ -147,11 +170,62 @@ namespace DestinyTogether.Sim
         public static float ForestDensity(int seed, Vec2 point)
             => Ramp(Noise01(seed ^ 0x5F3A, point.X, point.Y, ForestScale), ForestThreshold);
 
+        /// <summary>
+        /// Densidade de floresta somada ao cinturao que emoldura a vila. E esta que o gerador usa;
+        /// a de cima continua sendo a mata "pura" para quem so quer consultar o bioma.
+        /// </summary>
+        public static float ForestDensity(int seed, Vec2 point, Vec2 cityCenter, float keepClear)
+            => MathUtil.Clamp01(ForestDensity(seed, point) + CornerForest(point, cityCenter, keepClear));
+
         public static float QuarryDensity(int seed, Vec2 point)
             => Ramp(Noise01(seed ^ 0x2B7C, point.X, point.Y, QuarryScale), QuarryThreshold);
 
+        /// <summary>
+        /// Corta no limiar e depois amacia com smoothstep.
+        ///
+        /// O smoothstep nao e enfeite: ele AFASTA os dois extremos. Borda de bosque fica mais rala
+        /// (0,20 vira 0,10) e nucleo fica mais fechado (0,83 vira 0,92), que e exatamente a
+        /// diferenca entre "arvores espalhadas por toda parte" e "mata fechada com clareira do
+        /// lado". Sem ele, subir o teto de props so engrossaria o mundo inteiro por igual — e um
+        /// mundo uniformemente denso nao tem para onde explorar.
+        /// </summary>
         private static float Ramp(float value, float threshold)
-            => value <= threshold ? 0f : MathUtil.Clamp01((value - threshold) / (1f - threshold));
+        {
+            if (value <= threshold) return 0f;
+            float r = MathUtil.Clamp01((value - threshold) / (1f - threshold));
+            return r * r * (3f - 2f * r);
+        }
+
+        /// <summary>
+        /// O cinturao de mata das quatro diagonais, logo depois da clareira da vila.
+        ///
+        /// Existe porque a vila estava no meio de um campo aberto ate onde a vista alcanca, e o
+        /// mundo procedural so comecava a ficar interessante longe demais para se ver de casa. O
+        /// cinturao da fundo ao tabuleiro e coloca mata cerrada a uma corrida de distancia.
+        ///
+        /// **Nas diagonais, e nao nos eixos.** O peso e |sen(2t)| ao quadrado, que fecha os cantos
+        /// e deixa Norte, Sul, Leste e Oeste abertos. Nao e estetica: a horda vem do anel inteiro e
+        /// os pilares de Faixa sao a telegrafia da ameaca — emoldurar e bom, tapar a informacao de
+        /// jogo nao. Os cantos sao justamente onde nao ha nada que precise ser visto de longe.
+        /// </summary>
+        private static float CornerForest(Vec2 point, Vec2 cityCenter, float keepClear)
+        {
+            float dx = point.X - cityCenter.X;
+            float dz = point.Y - cityCenter.Y;
+            float distance = (float)Math.Sqrt(dx * dx + dz * dz);
+
+            if (distance <= keepClear || distance >= keepClear + CornerForestRange) return 0f;
+
+            float ux = dx / distance, uz = dz / distance;
+            float diagonal = Math.Abs(2f * ux * uz);   // 1 nas diagonais, 0 nos eixos
+
+            // Sobe depois da clareira e volta a zero no fim do cinturao, para o mundo procedural
+            // assumir sem uma emenda visivel.
+            float t = (distance - keepClear) / CornerForestRange;
+            float band = (float)Math.Sin(t * Math.PI);
+
+            return CornerForestStrength * diagonal * diagonal * band;
+        }
 
         // ------------------------------------------------------------------------------------
         // Geracao
@@ -163,62 +237,97 @@ namespace DestinyTogether.Sim
         /// <paramref name="into"/> e reutilizado pelo chamador para nao alocar por chunk — a
         /// apresentacao chama isto dezenas de vezes por segundo enquanto o jogador anda.
         /// </summary>
+        /// <param name="includeProps">
+        /// False monta so o que a simulacao precisa. Cenario nao e entidade: a simulacao nunca
+        /// tocou num prop, e agora que um chunk fechado tem 120 candidatos em vez de 26, gerar a
+        /// mata para depois joga-la fora custaria 4x mais em cada chunk que um heroi atravessa —
+        /// inclusive nas milhares de partidas do harness de balanceamento.
+        ///
+        /// Isto so e seguro porque os dois sorteios sao INDEPENDENTES (ver
+        /// <see cref="GenerateSpawns"/>): pular a mata nao move um Esconderijo um centimetro.
+        /// </param>
         public static void Generate(int seed, int cx, int cz, ArenaSpec arena, Vec2 cityCenter,
-                                    ChunkContent into)
+                                    ChunkContent into, bool includeProps = true)
         {
             into.Props.Clear();
             into.Spawns.Clear();
-
-            var rng = new Rng(unchecked(seed * 73856093 ^ cx * 19349663 ^ cz * 83492791));
-            float x0 = cx * ChunkSize, z0 = cz * ChunkSize;
 
             // A vila e o anel de spawn tem conteudo proprio, calibrado a mao. O mundo procedural
             // comeca depois deles — senao a mata brotaria em cima do tabuleiro e do campo de tiro.
             float keepClear = arena.OutskirtsRadius + arena.WorldClearance;
 
+            if (includeProps) GenerateProps(seed, cx, cz, cityCenter, keepClear, into);
+            GenerateSpawns(seed, cx, cz, arena, cityCenter, keepClear, into);
+        }
+
+        private static void GenerateProps(int seed, int cx, int cz, Vec2 cityCenter, float keepClear,
+                                          ChunkContent into)
+        {
+            var rng = new Rng(unchecked(seed * 73856093 ^ cx * 19349663 ^ cz * 83492791));
+            float x0 = cx * ChunkSize, z0 = cz * ChunkSize;
+
             for (int i = 0; i < MaxPropsPerChunk; i++)
             {
                 var p = new Vec2(x0 + rng.Range(0f, ChunkSize), z0 + rng.Range(0f, ChunkSize));
+
+                // O sorteio de variante e feito SEMPRE, aceito o prop ou nao. Consumir a mesma
+                // quantidade de aleatoriedade por candidato e o que mantem o resto do chunk igual
+                // quando um unico candidato cai fora.
+                int variant = rng.Range(0, 1 << 16);
+                float yaw = rng.Range(0f, 360f);
+                float roll = rng.Next01();
+                float size = rng.Next01();
+
                 if (Vec2.Distance(p, cityCenter) < keepClear) continue;
 
-                float forest = ForestDensity(seed, p);
+                float forest = ForestDensity(seed, p, cityCenter, keepClear);
                 float quarry = QuarryDensity(seed, p);
 
                 // Pedreira ganha da floresta onde as duas se sobrepoem: rocha exposta e o que
                 // impede a mata de crescer, e ver os dois misturados leria como bug de mapa.
                 if (quarry > 0.05f && quarry >= forest)
                 {
-                    if (rng.Next01() > quarry) continue;
+                    if (roll > quarry) continue;
                     into.Props.Add(new WorldProp
                     {
-                        Kind = rng.Next01() < 0.3f ? WorldPropKind.Penhasco : WorldPropKind.Pedra,
+                        Kind = (variant & 7) < 2 ? WorldPropKind.Penhasco : WorldPropKind.Pedra,
                         Position = p,
-                        Yaw = rng.Range(0f, 360f),
-                        Scale = rng.Range(0.7f, 1.6f)
+                        Yaw = yaw,
+                        Scale = 0.7f + size * 0.9f,
+                        Variant = variant
                     });
                 }
                 else if (forest > 0.05f)
                 {
-                    if (rng.Next01() > forest) continue;
+                    if (roll > forest) continue;
                     into.Props.Add(new WorldProp
                     {
-                        Kind = rng.Next01() < 0.28f ? WorldPropKind.Pinheiro : WorldPropKind.Arvore,
+                        Kind = (variant & 7) < 2 ? WorldPropKind.Pinheiro : WorldPropKind.Arvore,
                         Position = p,
-                        Yaw = rng.Range(0f, 360f),
-                        Scale = rng.Range(0.75f, 1.4f)
+                        Yaw = yaw,
+                        // Faixa larga de propósito: mata fechada com todas as arvores do mesmo
+                        // tamanho le como padrao de papel de parede, nao como floresta.
+                        Scale = 0.65f + size * 0.85f,
+                        Variant = variant
                     });
                 }
             }
-
-            GenerateSpawns(seed, cx, cz, arena, cityCenter, rng, into);
         }
 
+        /// <summary>
+        /// O que a simulacao materializa: nos colhiveis e Esconderijos.
+        ///
+        /// Tem sorteio PROPRIO, independente do da mata. Antes os dois dividiam um Rng e a ordem
+        /// importava — mudar a densidade da floresta movia todos os Esconderijos do mundo, e o
+        /// balanceamento medido ia junto. Separar deixa arte e economia livres uma da outra.
+        /// </summary>
         private static void GenerateSpawns(int seed, int cx, int cz, ArenaSpec arena, Vec2 cityCenter,
-                                           Rng rng, ChunkContent into)
+                                           float keepClear, ChunkContent into)
         {
+            var rng = new Rng(unchecked(seed * 19349663 ^ cx * 83492791 ^ cz * 73856093 ^ 0x5BD1E995));
+
             var center = ChunkCenter(cx, cz);
             float distance = Vec2.Distance(center, cityCenter);
-            float keepClear = arena.OutskirtsRadius + arena.WorldClearance;
             if (distance < keepClear) return;
 
             // O gradiente da fronteira: quanto mais longe, mais denso e mais rico o achado. Zero
@@ -226,6 +335,10 @@ namespace DestinyTogether.Sim
             // transforma "explorar" numa direcao, e nao apenas num passeio.
             float reach = MathUtil.Clamp01((distance - keepClear) / Math.Max(1f, arena.WorldRichnessRange));
 
+            // Densidade PURA, sem o cinturao das diagonais. O cinturao e cenario: se ele tambem
+            // spawnasse no colhivel, a vila ganharia um campo de madeira encostado nela — que e
+            // exatamente a regra "nada perto de casa rende com o tempo" indo pelo ralo, e o
+            // balanceamento medido junto.
             float forest = ForestDensity(seed, center);
             float quarry = QuarryDensity(seed, center);
             int index = 0;

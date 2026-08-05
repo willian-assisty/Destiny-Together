@@ -108,3 +108,7 @@ InitTestScene*.unity*
 
 # Saida do harness headless (Tools/Headless/run.ps1) — recompila em segundos, nao versionar
 /[Tt]ools/[Hh]eadless/bin/
+
+# Pacotes de origem da arte (Meshy). Ficam fora de Assets/ para o Unity nao indexar
+# centenas de MB de zip, e fora do git porque o que importa e o extraido em Art/Final.
+/ArtSource/

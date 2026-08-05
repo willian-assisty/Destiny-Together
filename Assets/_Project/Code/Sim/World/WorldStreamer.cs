@@ -126,7 +126,9 @@ namespace DestinyTogether.Sim
             Decode(key, out int cx, out int cz);
             state.LoadedChunks.Add(key);
 
-            WorldGen.Generate(state.MatchSeed, cx, cz, content.Arena, state.CityCenter, _scratch);
+            // Sem a mata: a simulacao nunca tocou num prop e um chunk fechado tem 120 candidatos.
+            WorldGen.Generate(state.MatchSeed, cx, cz, content.Arena, state.CityCenter, _scratch,
+                              includeProps: false);
 
             for (int i = 0; i < _scratch.Spawns.Count; i++)
             {

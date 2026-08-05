@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using DestinyTogether.Presentation;
 using UnityEditor;
@@ -24,18 +25,126 @@ namespace DestinyTogether.EditorTools
         /// Recria o material, o controlador e o prefab de um personagem.
         /// </summary>
         /// <param name="folder">Pasta do personagem, com "/" no fim.</param>
-        /// <param name="name">Nome base — o FBX tem de se chamar assim.</param>
+        /// <param name="name">Nome base — a malha tem de se chamar assim.</param>
         /// <param name="clipFbxSuffixes">Sufixos dos FBX de animação, na ordem em que entram.</param>
-        /// <returns>O prefab pronto, ou null se o FBX principal não estiver lá.</returns>
+        /// <returns>O prefab pronto, ou null se não houver malha na pasta.</returns>
         public static GameObject Build(string folder, string name, params string[] clipFbxSuffixes)
         {
-            string meshPath = $"{folder}{name}.fbx";
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(meshPath);
-            if (model == null) return null;
+            if (LoadMesh(folder, name) == null) return null;
 
+            EnsureRig(folder, name, clipFbxSuffixes);
+
+            var model = LoadMesh(folder, name);
             var material = BuildMaterial(folder, name);
-            var controller = BuildController(folder, name, clipFbxSuffixes);
-            return BuildPrefab(folder, name, model, material, controller);
+            var controller = BuildController(folder, name, clipFbxSuffixes, out bool clipsExpected);
+            return BuildPrefab(folder, name, model, material, controller, clipsExpected);
+        }
+
+        /// <summary>
+        /// A malha do personagem: FBX se houver, OBJ como alternativa.
+        ///
+        /// O OBJ existe porque o Unity **não importa .glb** — não nativamente e não sem pacote
+        /// extra. Quando um personagem chega em glTF, a malha é convertida para OBJ e entra por
+        /// aqui: dá para ver silhueta, proporção e textura na hora, o que é o que se quer ao
+        /// avaliar um personagem novo.
+        ///
+        /// O que o OBJ NÃO carrega é esqueleto. Ele é prévia, não destino — some no dia em que a
+        /// versão riggada em FBX chegar, e a preferência pelo FBX nesta busca faz essa troca
+        /// acontecer sozinha, sem ninguém precisar apagar nada.
+        /// </summary>
+        private static GameObject LoadMesh(string folder, string name)
+        {
+            foreach (var ext in MeshExtensions)
+            {
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{folder}{name}{ext}");
+                if (model != null) return model;
+            }
+            return null;
+        }
+
+        private static readonly string[] MeshExtensions = { ".fbx", ".obj" };
+
+        // ------------------------------------------------------------------------------
+        // Rig
+        // ------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Garante que malha e clipes estejam importados como rig, reimportando o que estiver
+        /// errado.
+        ///
+        /// **Postprocessador é palpite; setup é garantia.** `OnPreprocessModel` roda ANTES de o
+        /// arquivo ser lido, então na primeira passada ele decide sem saber: `transformPaths` vem
+        /// vazio e o avatar do personagem ainda não existe. Um palpite errado ali grava um .meta
+        /// dizendo "malha estática" que nunca mais é revisto — o personagem fica sem esqueleto e o
+        /// clipe sem curva, sem um único erro no console.
+        ///
+        /// Aqui o arquivo JÁ foi lido, então a pergunta tem resposta. Este é o lugar que corrige.
+        /// </summary>
+        private static void EnsureRig(string folder, string name, string[] clipSuffixes)
+        {
+            // Quem CHAMA diz se espera animação — uma árvore passa a lista de clipes vazia, um
+            // herói passa {"Run"}. É o discriminador certo: sem ele, o mesmo montador que serve
+            // aos dois forçaria rig Generic e um Avatar em cada tronco da floresta.
+            if (clipSuffixes == null || clipSuffixes.Length == 0) return;
+
+            string meshPath = $"{folder}{name}.fbx";
+            if (!File.Exists(meshPath)) return;   // prévia em OBJ não tem rig para garantir
+
+            bool meshChanged = Configure(meshPath, importer =>
+            {
+                if (importer.animationType == ModelImporterAnimationType.Generic &&
+                    importer.avatarSetup == ModelImporterAvatarSetup.CreateFromThisModel) return false;
+
+                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.importAnimation = false;
+                return true;
+            });
+
+            if (meshChanged)
+                Debug.Log($"[CharacterSetup] '{name}' foi reimportado como rig — o import anterior " +
+                          $"o tinha marcado como malha estática.");
+
+            var avatar = FindAvatar(meshPath);
+
+            foreach (var suffix in clipSuffixes)
+            {
+                string clipPath = $"{folder}{name}_{suffix}.fbx";
+                if (!File.Exists(clipPath)) continue;
+
+                Configure(clipPath, importer =>
+                {
+                    bool ok = importer.animationType == ModelImporterAnimationType.Generic &&
+                              importer.importAnimation &&
+                              (avatar == null || importer.sourceAvatar == avatar);
+                    if (ok) return false;
+
+                    importer.animationType = ModelImporterAnimationType.Generic;
+                    importer.importAnimation = true;
+                    importer.avatarSetup = avatar != null
+                        ? ModelImporterAvatarSetup.CopyFromOther
+                        : ModelImporterAvatarSetup.CreateFromThisModel;
+                    importer.sourceAvatar = avatar;
+                    return true;
+                });
+            }
+        }
+
+        /// <summary>Aplica um ajuste no importador e reimporta se algo mudou.</summary>
+        private static bool Configure(string path, System.Func<ModelImporter, bool> change)
+        {
+            if (AssetImporter.GetAtPath(path) is not ModelImporter importer) return false;
+            if (!change(importer)) return false;
+
+            importer.SaveAndReimport();
+            return true;
+        }
+
+        private static Avatar FindAvatar(string path)
+        {
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                if (asset is Avatar avatar) return avatar;
+            return null;
         }
 
         // ------------------------------------------------------------------------------
@@ -87,12 +196,33 @@ namespace DestinyTogether.EditorTools
             if (material.HasProperty(ShaderIds.Metallic)) material.SetFloat(ShaderIds.Metallic, 0.1f);
             if (material.HasProperty(ShaderIds.Smoothness)) material.SetFloat(ShaderIds.Smoothness, 0.35f);
 
+            // Instancing de GPU. Num personagem nao muda nada — existem quatro. Numa arvore muda
+            // tudo: mata fechada poe milhares da MESMA malha com o MESMO material em tela, que e
+            // exatamente o caso que o instancing resolve. Sem isso cada arvore vira uma chamada de
+            // desenho e a floresta densa fica cara pelo motivo errado (CPU, nao pixels).
+            material.enableInstancing = true;
+
             EditorUtility.SetDirty(material);
             return material;
         }
 
+        /// <summary>
+        /// Textura por papel, aceitando PNG ou JPG.
+        ///
+        /// A extensão não é escolha nossa: o Meshy grava PNG ao lado do FBX e JPEG embutido no
+        /// GLB. Aceitar as duas evita que o material saia sem albedo por causa de três letras.
+        /// </summary>
         private static Texture LoadTexture(string folder, string name, string suffix)
-            => AssetDatabase.LoadAssetAtPath<Texture>($"{folder}Textures/{name}_{suffix}.png");
+        {
+            foreach (var ext in TextureExtensions)
+            {
+                var tex = AssetDatabase.LoadAssetAtPath<Texture>($"{folder}Textures/{name}_{suffix}{ext}");
+                if (tex != null) return tex;
+            }
+            return null;
+        }
+
+        private static readonly string[] TextureExtensions = { ".png", ".jpg", ".jpeg" };
 
         // ------------------------------------------------------------------------------
         // Animator
@@ -106,31 +236,56 @@ namespace DestinyTogether.EditorTools
         /// só, uma máquina de estados seria cerimônia em volta de nada — e quando o Idle chegar,
         /// acrescentar o segundo estado e um `Speed` de transição é uma edição pequena aqui.
         /// </summary>
-        private static AnimatorController BuildController(string folder, string name, string[] suffixes)
+        private static AnimatorController BuildController(string folder, string name, string[] suffixes,
+                                                          out bool clipsExpected)
         {
             string path = $"{folder}{name}.controller";
-
-            // Recria do zero: editar um controlador existente acumula estados órfãos a cada
-            // execução, e o asset é derivado de qualquer forma.
             AssetDatabase.DeleteAsset(path);
+
+            // Personagem sem clipe nenhum não ganha controlador. Um Animator com controlador
+            // vazio não é neutro: ele ASSUME o comando das transformações e congela o corpo na
+            // pose de bind, o que apaga até a locomoção procedural que serviria de plano B.
+            //
+            // Mas "sem clipe" e "clipe ainda não importado" são estados DIFERENTES que se parecem
+            // daqui, e confundi-los custa caro: este setup roda de dentro de um postprocessador de
+            // import, então na primeira compilação depois de largar os arquivos na pasta o FBX de
+            // animação pode não ter sido processado ainda. Tratar isso como "não tem animação"
+            // grava um prefab sem Animator — e como o gate de versão já foi satisfeito, ele nunca
+            // mais é reconstruído. O personagem perde a corrida em definitivo, sem um único erro
+            // no console. Por isso a pergunta é feita ao DISCO, não ao AssetDatabase.
+            var clips = new List<(string suffix, AnimationClip clip)>();
+            clipsExpected = false;
+
+            foreach (var suffix in suffixes)
+            {
+                string fbx = $"{folder}{name}_{suffix}.fbx";
+                if (!File.Exists(fbx)) continue;
+                clipsExpected = true;
+
+                var clip = FindClip(fbx);
+                if (clip == null)
+                {
+                    // O arquivo está lá e não veio clipe: import atrasado. Forçar e reler.
+                    AssetDatabase.ImportAsset(fbx, ImportAssetOptions.ForceSynchronousImport);
+                    clip = FindClip(fbx);
+                }
+
+                if (clip != null) clips.Add((suffix, clip));
+                else Debug.LogError($"[CharacterSetup] '{fbx}' existe mas não produziu AnimationClip. " +
+                                    $"O Animator foi PRESERVADO para não apagar a animação em silêncio.");
+            }
+
+            if (clips.Count == 0) return null;
+
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
             controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
 
             var layer = controller.layers[0].stateMachine;
-            bool first = true;
-
-            foreach (var suffix in suffixes)
+            for (int i = 0; i < clips.Count; i++)
             {
-                var clip = FindClip($"{folder}{name}_{suffix}.fbx");
-                if (clip == null) continue;
-
-                var state = layer.AddState(suffix);
-                state.motion = clip;
-                if (first)
-                {
-                    layer.defaultState = state;
-                    first = false;
-                }
+                var state = layer.AddState(clips[i].suffix);
+                state.motion = clips[i].clip;
+                if (i == 0) layer.defaultState = state;
             }
 
             EditorUtility.SetDirty(controller);
@@ -155,7 +310,8 @@ namespace DestinyTogether.EditorTools
         // ------------------------------------------------------------------------------
 
         private static GameObject BuildPrefab(string folder, string name, GameObject model,
-                                              Material material, AnimatorController controller)
+                                              Material material, AnimatorController controller,
+                                              bool clipsExpected)
         {
             string path = $"{folder}{name}.prefab";
             var instance = Object.Instantiate(model);
@@ -171,12 +327,28 @@ namespace DestinyTogether.EditorTools
                     r.sharedMaterials = slots;
                 }
 
-                var animator = instance.GetComponentInChildren<Animator>() ?? instance.AddComponent<Animator>();
-                animator.runtimeAnimatorController = controller;
-                // A posição vem da simulação, sempre. Root motion faria a animação disputar o
-                // controle do corpo com o servidor — e no multiplayer, perder.
-                animator.applyRootMotion = false;
-                animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+                var animator = instance.GetComponentInChildren<Animator>();
+
+                if (controller != null)
+                {
+                    animator ??= instance.AddComponent<Animator>();
+                    animator.runtimeAnimatorController = controller;
+                    // A posição vem da simulação, sempre. Root motion faria a animação disputar
+                    // o controle do corpo com o servidor — e no multiplayer, perder.
+                    animator.applyRootMotion = false;
+                    animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+                }
+                else if (animator != null && !clipsExpected)
+                {
+                    // Malha sem clipe NENHUM no disco: o Animator que veio no import é REMOVIDO,
+                    // não deixado vazio. Animator sem controlador ainda assume as transformações e
+                    // trava o corpo na pose de bind — e sem ele a locomoção procedural volta a
+                    // valer, que é exatamente o que se quer numa prévia sem rig.
+                    //
+                    // Quando há FBX de animação no disco mas ele falhou em importar, o Animator
+                    // FICA: perder a animação é pior que um corpo parado, e o erro já foi logado.
+                    Object.DestroyImmediate(animator);
+                }
 
                 if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
                 return PrefabUtility.SaveAsPrefabAsset(instance, path);

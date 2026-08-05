@@ -34,6 +34,55 @@ namespace DestinyTogether.EditorTools
         /// <summary>Arte própria do projeto, ao contrário dos packs de loja que ficam na raiz.</summary>
         public const string CharacterFolder = "Assets/_Project/Art/Final/Characters/";
 
+        /// <summary>Cenario proprio do projeto. Mesma estrutura de um personagem, sem esqueleto.</summary>
+        public const string NatureFolder = "Assets/_Project/Art/Final/Nature/";
+
+        /// <summary>
+        /// As arvores do mundo procedural, todas do mesmo tronco estilistico.
+        ///
+        /// Uma lista e nao um par: quando <see cref="WorldPropStreamer"/> escolhia a malha por um
+        /// hash do TIPO, cinco arvores diferentes teriam desenhado uma floresta com duas. Agora a
+        /// escolha vem da variante sorteada pelo gerador, entao acrescentar uma linha aqui aumenta
+        /// de verdade a variedade da mata.
+        /// </summary>
+        private static readonly string[] Trees =
+        {
+            "ArvoreBaixoPoli",
+            "ArvoreGeometrica",
+            "ArvoreMonolito",
+            "PinheiroGeometrico",
+            "PinheiroNevado",
+        };
+
+        /// <summary>Arte propria do projeto — vale para personagem e cenario.</summary>
+        private static bool IsOwnArt(string path)
+            => path.StartsWith(CharacterFolder, System.StringComparison.Ordinal) ||
+               path.StartsWith(NatureFolder, System.StringComparison.Ordinal);
+
+        /// <summary>
+        /// Prefabs das arvores proprias: malha + material URP, sem Animator.
+        ///
+        /// Reusa o montador de personagem porque a operacao e a MESMA — FBX texturizado vira peca
+        /// jogavel — e a lista de clipes vazia e o que separa uma coisa da outra. Manter dois
+        /// montadores quase iguais custaria a proxima correcao ser feita so em um deles.
+        /// </summary>
+        private static List<GameObject> BuildTrees(List<string> missing, ref int mapped)
+        {
+            var built = new List<GameObject>(Trees.Length);
+
+            foreach (var name in Trees)
+            {
+                string folder = $"{NatureFolder}{name}/";
+                var prefab = CharacterSetup.Build(folder, name);
+                if (prefab == null) { missing.Add($"{folder}{name}.fbx"); continue; }
+
+                built.Add(prefab);
+                mapped++;
+            }
+
+            return built;
+        }
+
         /// <summary>
         /// (classe de herói, malha, largura em células, teto de altura em células)
         ///
@@ -52,6 +101,13 @@ namespace DestinyTogether.EditorTools
             // "Azure Sentinel" -> Guarda: sentinela é quem segura a Linha, e azul já é a cor do
             // assento 0 na gramática de placeholder. O nome do arquivo casou com o design sozinho.
             (DefaultContent.Guarda, "AzureSentinel", 3.0f, 1.7f),
+
+            // Arqueiro -> Arauto, que é a classe de alcance do jogo: o mais rápido (8,8), o mais
+            // frágil (85 HP) e o de MAIOR raio de ataque. Arqueiro é exatamente esse kit.
+            //
+            // Medido no GLB, ele já vem 1,70 de altura com pivô nos pés — a única peça até agora
+            // que chegou na escala e na orientação certas sem precisar de nada.
+            (DefaultContent.Arauto, "Arqueiro", 3.0f, 1.7f),
         };
 
         /// <summary>Sufixos dos FBX de animação, na ordem em que entram no controlador.</summary>
@@ -158,17 +214,50 @@ namespace DestinyTogether.EditorTools
         /// v7: primeiro personagem proprio (Azure Sentinel -> Guarda).
         /// v8: correcao de eixo do personagem — ele tambem e Z-up, como o pack.
         /// v9: personagem riggado com clipe de corrida; orientacao passa a ser medida (AutoUpright).
+        /// v10: Arqueiro (previa em OBJ, sem rig) -> Arauto; malha sem esqueleto nao ganha Animator.
+        /// v11: cinco arvores proprias na mata; mata fechada; prefab por variante em vez de por tipo.
         /// </summary>
-        private const int CurrentSetupVersion = 9;
+        private const int CurrentSetupVersion = 11;
 
         private static void TrySetupOnce()
         {
             if (AssetDatabase.LoadAssetAtPath<GameObject>(TownHallPath) == null) return; // packs ausentes
 
             var existing = AssetDatabase.LoadAssetAtPath<VisualsProfile>(VisualsPath);
-            if (existing != null && existing.SetupVersion >= CurrentSetupVersion) return;
+            if (existing != null && existing.SetupVersion >= CurrentSetupVersion && !RigIsBroken()) return;
 
             Apply(verbose: true);
+        }
+
+        /// <summary>
+        /// Um personagem tem FBX de animação no disco mas o prefab saiu sem Animator?
+        ///
+        /// O gate de versão sozinho é bom para "o setup mudou" e péssimo para "o setup falhou": um
+        /// import fora de ordem podia gravar um prefab sem Animator, satisfazer o gate e deixar o
+        /// personagem sem animação PARA SEMPRE, porque a única forma de reconstruir era um clique
+        /// de menu que ninguém sabe que precisa dar. Foi exatamente assim que a corrida do primeiro
+        /// personagem sumiu. Verificar o resultado em vez de confiar no número fecha esse buraco.
+        /// </summary>
+        private static bool RigIsBroken()
+        {
+            foreach (var (_, name, _, _) in Heroes)
+            {
+                string folder = $"{CharacterFolder}{name}/";
+
+                bool hasClip = false;
+                foreach (var suffix in HeroClips)
+                    hasClip |= System.IO.File.Exists($"{folder}{name}_{suffix}.fbx");
+                if (!hasClip) continue;
+
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{folder}{name}.prefab");
+                if (prefab == null || prefab.GetComponentInChildren<Animator>(true) == null)
+                {
+                    Debug.LogWarning($"[ArtSetup] '{name}' tem clipe no disco mas o prefab está sem " +
+                                     $"Animator. Reconstruindo.");
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -211,7 +300,7 @@ namespace DestinyTogether.EditorTools
             /// </summary>
             private void OnPreprocessModel()
             {
-                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (!IsOwnArt(assetPath)) return;
                 if (assetImporter is not ModelImporter importer) return;
 
                 // O material vem do CharacterSetup, não do FBX: o Meshy referencia a textura por
@@ -237,14 +326,32 @@ namespace DestinyTogether.EditorTools
                 // errado. Humanoid destravaria a biblioteca do Mixamo, ao custo de um mapeamento
                 // de avatar que pode falhar — troca que vale a pena depois de o jogo rodar, não
                 // antes.
+                // Malha SEM esqueleto (prévia em OBJ, por exemplo) não ganha rig. Pedir avatar de
+                // uma malha estática produz um avatar inválido, e Animator com avatar inválido
+                // congela o corpo em vez de deixá-lo em paz.
+                if (!HasSkeleton(importer))
+                {
+                    importer.animationType = ModelImporterAnimationType.None;
+                    importer.importAnimation = false;
+                    return;
+                }
+
                 importer.animationType = ModelImporterAnimationType.Generic;
                 importer.importAnimation = isClip;
 
                 if (isClip)
                 {
                     // O clipe não traz malha nova; ele empresta o esqueleto do personagem.
-                    importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
-                    importer.sourceAvatar = FindCharacterAvatar(assetPath);
+                    //
+                    // Mas se a malha ainda não foi importada o avatar não existe, e `CopyFromOther`
+                    // apontando para o nada devolve um clipe VAZIO. Nesse caso o clipe cria o
+                    // próprio avatar a partir do esqueleto que ele mesmo carrega — medido, isso
+                    // liga por caminho de transform sem uma única divergência.
+                    var avatar = FindCharacterAvatar(assetPath);
+                    importer.avatarSetup = avatar != null
+                        ? ModelImporterAvatarSetup.CopyFromOther
+                        : ModelImporterAvatarSetup.CreateFromThisModel;
+                    importer.sourceAvatar = avatar;
                 }
                 else
                 {
@@ -256,6 +363,32 @@ namespace DestinyTogether.EditorTools
                     importer.optimizeMeshPolygons = true;
                     importer.optimizeMeshVertices = true;
                 }
+            }
+
+            /// <summary>
+            /// True quando o arquivo traz ossos. OBJ nunca traz; FBX de personagem riggado sim.
+            /// Ler a lista de transforms do importador é a maneira barata de perguntar.
+            /// </summary>
+            private static bool HasSkeleton(ModelImporter importer)
+            {
+                // Cenário nunca é riggado, e OBJ não carrega osso em formato nenhum.
+                if (importer.assetPath.StartsWith(NatureFolder, System.StringComparison.Ordinal)) return false;
+                if (importer.assetPath.EndsWith(".obj", System.StringComparison.OrdinalIgnoreCase)) return false;
+
+                var bones = importer.transformPaths;
+
+                // `transformPaths` só existe DEPOIS de um import: na primeira passada por um
+                // arquivo novo ele vem VAZIO, e é justamente essa a passada que decide se o
+                // personagem ganha rig. Ler vazio como "malha estática" importava o herói sem
+                // esqueleto e o clipe sem curva — em silêncio, e de forma pegajosa, porque o
+                // .meta gravado passa a dizer "estático" para sempre.
+                //
+                // Vazio significa "ainda não sei". Para um FBX de personagem a resposta segura é
+                // "tem esqueleto": no pior caso sobra um avatar sem uso; no melhor, o rig entra.
+                if (bones == null || bones.Length == 0) return true;
+
+                // Já sabemos: transformPaths inclui a raiz (""), então um único item é só a malha.
+                return bones.Length > 2;
             }
 
             /// <summary>
@@ -278,7 +411,7 @@ namespace DestinyTogether.EditorTools
             /// <summary>Todo clipe de locomoção é cíclico. Sem loop, o herói corre uma vez e congela.</summary>
             private void OnPreprocessAnimation()
             {
-                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (!IsOwnArt(assetPath)) return;
                 if (assetImporter is not ModelImporter importer) return;
 
                 var clips = importer.defaultClipAnimations;
@@ -295,7 +428,7 @@ namespace DestinyTogether.EditorTools
             /// </summary>
             private void OnPreprocessTexture()
             {
-                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (!IsOwnArt(assetPath)) return;
                 if (assetImporter is not TextureImporter importer) return;
 
                 string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
@@ -307,7 +440,13 @@ namespace DestinyTogether.EditorTools
                     importer.sRGBTexture = false;
 
                 // 26 MB de albedo em 4K num personagem que ocupa ~12% da tela é desperdício puro.
-                importer.maxTextureSize = 2048;
+                //
+                // Árvore leva metade disso: ela ocupa 2 células numa tela de ~28, e existem
+                // MILHARES delas em memória ao mesmo tempo. Num personagem a textura é o rosto do
+                // jogo; numa árvore de mata fechada ela é uma mancha de cor a 40 unidades de
+                // distância, quase sempre dentro da névoa.
+                bool nature = assetPath.StartsWith(NatureFolder, System.StringComparison.Ordinal);
+                importer.maxTextureSize = nature ? 1024 : 2048;
             }
         }
 
@@ -373,13 +512,20 @@ namespace DestinyTogether.EditorTools
             if (visuals.GroundMaterial == null) missing.Add(GroundMat);
             visuals.GroundTint = DeadGrassTint;
 
-            visuals.ScatterProps = ScatterPaths
-                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
-                .Where(g => g != null)
+            // As arvores proprias primeiro, as do pack depois. A ordem importa porque a variante
+            // sorteada indexa a lista: com as nossas na frente, elas dominam a mata mesmo se um
+            // pack for removido — e se as nossas sumirem, o pack cobre o buraco sem deixar o mundo
+            // pelado.
+            visuals.ScatterProps = BuildTrees(missing, ref mapped)
+                .Concat(ScatterPaths
+                    .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+                    .Where(g => g != null))
                 .ToList();
-            // 320 arvores divididas por quatro florestas = 80 cada. Densidade suficiente para
-            // ler como mata fechada; o miolo do mapa e as Faixas ortogonais continuam limpos.
-            visuals.ScatterCount = 320;
+            // 440 arvores divididas por quatro florestas = 110 cada, num circulo de raio 13: uma
+            // arvore a cada ~4,8 celulas. E a mesma densidade do nucleo do mundo procedural, para
+            // que o bosque da vila e o cinturao que vem logo depois leiam como a MESMA floresta.
+            // O miolo do mapa e as Faixas ortogonais continuam limpos.
+            visuals.ScatterCount = 440;
             visuals.ForestRadius = 13f;
             visuals.ForestDensityBias = 0.72f;
             visuals.ForestClearing = 4f;
