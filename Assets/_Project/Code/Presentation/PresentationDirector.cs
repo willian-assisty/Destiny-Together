@@ -353,10 +353,22 @@ namespace DestinyTogether.Presentation
             if (_viewsById.TryGetValue(h.Id, out var existing)) return existing;
 
             var pos = GridToWorld.ToWorld(h.Position);
-            // A cor do jogador continua mandando no placeholder: saber de quem e o heroi e
-            // informacao de jogo, nao decoracao. Com arte real, a distincao vem do modelo.
+            // A cor do jogador manda tanto no placeholder quanto na arte de verdade: saber de
+            // quem e o heroi e informacao de jogo, nao decoracao.
             var view = _views.CreateEntityView($"Heroi_{h.Owner.Index}", h.Def, PlaceholderVisuals.Get(h.Def),
                                                pos, PlaceholderVisuals.PlayerColor(h.Owner.Index));
+
+            // Locomocao: com arte riggada o Animator assume; sem ela, o balanco procedural. Para
+            // ligar nos monstros tambem, a mesma linha em EnsureMonsterView — foi deixado de fora
+            // porque muda a leitura de duzias de peças ao mesmo tempo.
+            view.Locomotion = true;
+
+            // O clipe roda a 1x quando o heroi corre na velocidade dele. Sem amarrar os dois, um
+            // Arauto (8,8 celulas/s) e um Golem (5,7) usariam a mesma cadencia de passada, e um
+            // dos dois pareceria patinar.
+            var spec = _sim.Content.GetHero(h.Def);
+            if (spec != null && spec.MoveSpeed > 0.1f) view.ClipReferenceSpeed = spec.MoveSpeed;
+
             return Register(h.Id, view, pos);
         }
 

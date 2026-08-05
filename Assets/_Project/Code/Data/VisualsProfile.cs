@@ -41,6 +41,10 @@ namespace DestinyTogether.Data
         [Tooltip("Desliga o auto-fit e usa a escala original do prefab.")]
         public bool KeepOriginalScale;
 
+        [Tooltip("Endireita a peca MEDINDO em vez de confiar numa rotacao fixa. Para humanoides: " +
+                 "gente e sempre mais alta que funda, entao altura menor que profundidade = deitado.")]
+        public bool AutoUpright;
+
         public DefId Id => DefId.FromName(DefName);
 
         public static VisualEntry Create(string defName, GameObject prefab, float targetCells = 1f,

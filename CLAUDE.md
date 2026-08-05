@@ -122,6 +122,12 @@ protege isso.
   `TodoEsconderijo_CabeDentroDoMundoAlcancavel` existe por causa disso.
 - **Views:** toda arte mora no filho `Visual`. Presenters chamam
   `IEntityView.PlayAction(ViewActionId, duração)`, nunca `Animator.Play("...")`.
+- **Locomoção é procedural até haver rig.** `EntityView.Locomotion` anima o corpo inteiro
+  (balanço, rolagem de peso, inclinação) a partir do deslocamento real — sem esqueleto, sem
+  Animator, sem clipe. A fase avança com a **distância percorrida**, não com o tempo: é o que
+  prende a passada ao chão e separa "andando" de "patinando" em qualquer velocidade. Mexe só em
+  posição e rotação do `Visual`; a escala fica livre para o punch de ataque. Quando a malha
+  voltar riggada, isto desliga num bool e o Animator entra pelo mesmo `PlayAction`.
 - **Arte real:** 1 célula = 1 unidade, pivot nos pés, +Z para a frente. `VisualFitter` normaliza
   automaticamente por bounds, então pack de loja fora de escala não é problema.
 - **Nomes de conteúdo:** `DefId` vem do hash FNV-1a do nome. Renomear um prédio é uma mudança de
@@ -190,11 +196,25 @@ Arte própria do projeto vive em `Assets/_Project/Art/Final/Characters/` — os 
 na raiz de `Assets/`, e a separação é intencional: reimportar um `.unitypackage` não pode pisar no
 que é nosso.
 
-Para adicionar um personagem: solte o FBX na pasta e acrescente uma linha na tabela `Heroes` do
-`ArtSetup`. **Não edite o `VisualsProfile` à mão** — `Apply()` limpa `Entries` e reconstrói, então
+Estrutura por personagem, e os nomes são contrato — `CharacterSetup` e o postprocessor os usam
+para saber o que é malha, o que é clipe e o que é textura:
+
+```
+Characters/<Nome>/
+    <Nome>.fbx              malha riggada  (o nome IGUAL ao da pasta = é a malha)
+    <Nome>_Run.fbx          clipe          (qualquer outro FBX na pasta = é clipe)
+    Textures/<Nome>_BaseColor|_Normal|_Metallic|_Roughness.png
+```
+
+Para adicionar um personagem: extraia nessa estrutura e acrescente uma linha na tabela `Heroes` do
+`ArtSetup`. Para adicionar um clipe: solte o FBX como `<Nome>_<Clipe>.fbx` e acrescente o sufixo em
+`HeroClips`. **Não edite o `VisualsProfile` à mão** — `Apply()` limpa `Entries` e reconstrói, então
 mapeamento feito no inspector some no próximo setup.
 
-Três regras que a primeira importação (Azure Sentinel → Guarda) estabeleceu:
+`CharacterSetup` monta o que é derivado (material URP, `AnimatorController`, prefab) e pode ser
+apagado a qualquer momento: volta igual no próximo setup.
+
+As regras que as duas importações do Azure Sentinel estabeleceram:
 
 - **Altura manda, largura não.** Para prédio, `TargetCells` (largura) é o valor que controla; para
   personagem é `MaxHeightCells`. O motivo é a pose: medido, o modelo tem 1,90 de envergadura por
@@ -202,13 +222,34 @@ Três regras que a primeira importação (Azure Sentinel → Guarda) estabeleceu
   dia em que fosse riggado com os braços ao lado do corpo, crescer sozinho. Deixe `TargetCells`
   folgado (3.0) e a altura em **1,7 células** — casa com as cápsulas de placeholder e ocupa ~12%
   da tela na câmera atual.
-- **Sem correção de eixo.** Ao contrário do Polylised, o FBX do personagem já traz
-  `Lcl Rotation (-90, 0, 0)` no próprio nó e o Unity aplica sozinho. Rodar de novo o deitaria.
-- **A cor é do assento, não do modelo.** `ViewFactory.ApplyOwnerTint` carimba a cor do jogador na
-  arte importada. Com quatro heróis usando a mesma malha, "de quem é esse" some se o modelo mandar
-  na cor — e isso é regra de leitura, não decoração. De quebra cobre o modelo que chega **sem
-  material**: em URP um renderer sem material desenha magenta, e atribuir o material de
-  placeholder resolve as duas coisas de uma vez.
+- **Orientação é MEDIDA, nunca fixada.** `VisualEntry.AutoUpright` mede os bounds e endireita se
+  a profundidade passar a altura — o invariante é que gente é sempre mais alta do que funda.
+  A largura fica fora da conta de propósito: personagem de braços abertos é mais largo que alto, e
+  usar largura daria falso positivo em T-pose.
+
+  Isso não é preciosismo. Medido: a malha **estática** do Azure Sentinel veio Z-up (pedia `-90` em
+  X) e a versão **riggada do mesmo personagem** veio Y-up, em que o mesmo `-90` a deitaria. As duas
+  declaram `UpAxis=Y` e as duas trazem `Lcl Rotation (-90,0,0)` no nó. Não dá para saber lendo o
+  cabeçalho, então rotação fixa em tabela é uma aposta que um dia sai errada.
+- **Quando algo parecer torto, meça antes de tentar rotações.** Os scripts do scratchpad
+  (`fbxsilhouette.py`, `fbxrender.py`, `fbxfacing.py`) leem o FBX binário e imprimem a silhueta em
+  ASCII nos três planos, mais os sinais de "para que lado ele olha" (ponta do pé e nariz). Uma
+  olhada resolve o que três tentativas de rotação não resolvem.
+- **Rig Generic, não Humanoid.** Clipe e malha vêm do mesmo esqueleto, então a ligação por caminho
+  de transform casa exata e não há retarget para falhar. Humanoid destravaria a biblioteca do
+  Mixamo ao custo de um mapeamento de avatar que pode falhar — troca que vale depois de o jogo
+  rodar, não antes. O campo é `animationType` no `OnPreprocessModel`.
+- **Root motion desligado, sempre.** A posição vem da simulação. Root motion faria a animação
+  disputar o controle do corpo com o servidor — e no multiplayer, perder.
+- **A cor do assento não pisa em arte texturizada.** `ViewFactory.ApplyOwnerTint` carimba a cor do
+  jogador quando o material **não tem albedo** — o que cobre primitivas e o modelo que chega sem
+  material nenhum (em URP, renderer sem material desenha magenta). Com textura pintada ele não
+  toca em nada: carimbar por cima transformaria o trabalho do artista numa silhueta chapada.
+
+  Isso deixa uma dívida aberta e vale saber: com quatro heróis usando a mesma malha texturizada,
+  "de quem é esse" não tem resposta visual. A regra "cor diz de que LADO está" continua valendo —
+  ela só precisa de um recurso que não dispute o albedo. Anel colorido no chão sob os pés é o
+  candidato óbvio, e é o que fazer antes do primeiro teste a quatro.
 
 `OnPreprocessModel` no `ArtSetup` aplica os import settings (sem material, sem animação, sem
 blendshape) para qualquer FBX dessa pasta. Fica em código e não no `.meta` porque `.meta` é gerado

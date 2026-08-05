@@ -50,6 +50,53 @@ namespace DestinyTogether.Presentation
         public float PositionSmoothing = 18f;
         public float RotationSmoothing = 14f;
 
+        // ------------------------------------------------------------------------------
+        // Locomocao procedural
+        //
+        // Anima o corpo INTEIRO — sem esqueleto, sem Animator, sem clipe. Existe porque a malha
+        // do personagem chegou sem rig, e uma peca que desliza pelo chao lê como bug antes de ler
+        // como placeholder. Balanco, rolagem de peso e inclinacao dao a leitura de "andando" a
+        // partir de uma camera a 50 graus, que e de onde este jogo e visto.
+        //
+        // NAO substitui um ciclo de caminhada de verdade: quando a malha voltar riggada, isto se
+        // desliga num bool e o Animator entra pelo mesmo PlayAction que ja existe.
+        // ------------------------------------------------------------------------------
+
+        /// <summary>Liga a locomocao. So para quem anda — predio balancando lê como terremoto.</summary>
+        public bool Locomotion;
+
+        /// <summary>Celulas percorridas por passada completa (dois passos).</summary>
+        public float StrideLength = 1.25f;
+        public float BobHeight = 0.07f;
+        public float RollDegrees = 6f;
+        public float LeanDegrees = 8f;
+        /// <summary>Velocidade em que a marcha esta cheia. Abaixo disso, some proporcionalmente.</summary>
+        public float FullGaitSpeed = 3f;
+
+        private Vector3 _baseVisualPosition;
+        private Vector3 _lastWorldPosition;
+        private float _stridePhase;
+        private float _speed;
+
+        /// <summary>
+        /// Animator da peca, quando ela chegou riggada. Presente = o clipe manda no corpo e a
+        /// locomocao procedural sai de cena; ausente = procedural assume. Nunca os dois, senao o
+        /// balanco somaria por cima do que a animacao ja faz.
+        /// </summary>
+        private Animator _animator;
+        private static readonly int SpeedParam = Animator.StringToHash("Speed");
+
+        /// <summary>Velocidade em que o clipe roda na cadencia em que foi autorado.</summary>
+        public float ClipReferenceSpeed = 6f;
+
+        public bool HasAnimator => _animator != null;
+
+        public void SetAnimator(Animator animator)
+        {
+            _animator = animator;
+            if (_animator != null) _animator.applyRootMotion = false;
+        }
+
         private static readonly Color HitFlash = new Color(1f, 0.45f, 0.42f);
 
         public EntityId Id => _id;
@@ -59,7 +106,12 @@ namespace DestinyTogether.Presentation
         {
             _id = id;
             _targetPosition = transform.position;
-            if (_visual != null) _baseScale = _visual.localScale;
+            _lastWorldPosition = transform.position;
+            if (_visual != null)
+            {
+                _baseScale = _visual.localScale;
+                _baseVisualPosition = _visual.localPosition;
+            }
         }
 
         public void SetVisual(Transform visual, Renderer renderer, Color baseColor)
@@ -68,6 +120,9 @@ namespace DestinyTogether.Presentation
             _renderer = renderer;
             _baseColor = baseColor;
             _baseScale = visual != null ? visual.localScale : Vector3.one;
+            // A primitiva nasce com localPosition.y = altura/2; o prefab nasce em zero. Guardar o
+            // repouso em vez de assumir zero e o que faz a locomocao servir aos dois.
+            _baseVisualPosition = visual != null ? visual.localPosition : Vector3.zero;
             _block = new MaterialPropertyBlock();
         }
 
@@ -97,6 +152,10 @@ namespace DestinyTogether.Presentation
         {
             _targetPosition = position;
             transform.position = position;
+            // Sem isto o amanhecer — que teleporta os herois para a Prefeitura — mediria a
+            // distancia do salto como velocidade e o personagem sairia correndo parado.
+            _lastWorldPosition = position;
+            _speed = 0f;
         }
 
         /// <summary>
@@ -115,6 +174,7 @@ namespace DestinyTogether.Presentation
             visual.localScale = Vector3.Scale(visual.localScale, factor);
             visual.localPosition = Vector3.Scale(visual.localPosition, factor);
             _baseScale = visual.localScale;
+            _baseVisualPosition = visual.localPosition;
         }
 
         protected virtual void Update()
@@ -131,7 +191,72 @@ namespace DestinyTogether.Presentation
                                                       1f - Mathf.Exp(-RotationSmoothing * dt));
             }
 
+            TickLocomotion(dt);
             TickAction(dt);
+        }
+
+        /// <summary>
+        /// Balanco, rolagem e inclinacao a partir do deslocamento real.
+        ///
+        /// A fase avanca com a DISTANCIA percorrida, nao com o tempo. E o detalhe que separa
+        /// "andando" de "patinando": a passada fica presa ao chao em qualquer velocidade, entao
+        /// um heroi lento da passos lentos e um rapido da passos rapidos sem nenhum ajuste.
+        ///
+        /// Mexe apenas em posicao e rotacao do visual — a escala fica livre para o punch de
+        /// ataque de TickAction, que nao pode brigar com isto.
+        /// </summary>
+        private void TickLocomotion(float dt)
+        {
+            if (!Locomotion || _visual == null) return;
+
+            var delta = transform.position - _lastWorldPosition;
+            _lastWorldPosition = transform.position;
+            delta.y = 0f;
+
+            float instant = dt > 0.0001f ? delta.magnitude / dt : 0f;
+            _speed = Mathf.Lerp(_speed, instant, 1f - Mathf.Exp(-9f * dt));
+
+            if (_animator != null) { TickAnimator(dt); return; }
+
+            _stridePhase += delta.magnitude / Mathf.Max(0.05f, StrideLength) * Mathf.PI * 2f;
+            if (_stridePhase > Mathf.PI * 2f) _stridePhase -= Mathf.PI * 2f;
+
+            float gait = Mathf.Clamp01(_speed / Mathf.Max(0.1f, FullGaitSpeed));
+
+            // Dois toques de pe por passada (abs do seno), rolagem de peso uma vez por passada.
+            float bob = Mathf.Abs(Mathf.Sin(_stridePhase)) * BobHeight * gait;
+            float roll = Mathf.Sin(_stridePhase) * RollDegrees * gait;
+            float lean = LeanDegrees * gait;
+
+            // Parado o corpo respira. Sem isso o heroi em repouso vira estatua, e estatua no meio
+            // de um mundo que se move lê como objeto quebrado.
+            float breath = Mathf.Sin(Time.time * 1.7f) * 0.014f * (1f - gait);
+
+            _visual.localPosition = _baseVisualPosition + new Vector3(0f, bob + breath, 0f);
+            _visual.localRotation = Quaternion.Euler(lean, 0f, roll);
+        }
+
+        /// <summary>
+        /// Aciona o clipe pela velocidade REAL do corpo.
+        ///
+        /// O ciclo de corrida foi autorado numa cadencia so; casar a taxa de reproducao com o
+        /// deslocamento e o que impede o personagem de patinar (correr no lugar) ou de deslizar
+        /// (andar sem mexer as pernas) — o mesmo principio da fase por distancia da versao
+        /// procedural, agora aplicado ao relogio da animacao.
+        ///
+        /// Com um clipe so, parar congela a pose. Enquanto nao houver um Idle, um respiro sutil
+        /// entra no lugar: e seguro justamente porque o clipe esta parado e nao ha o que somar.
+        /// </summary>
+        private void TickAnimator(float dt)
+        {
+            float gait = _speed / Mathf.Max(0.1f, ClipReferenceSpeed);
+
+            _animator.SetFloat(SpeedParam, _speed);
+            _animator.speed = gait < 0.06f ? 0f : Mathf.Clamp(gait, 0.35f, 1.8f);
+
+            float breath = _animator.speed > 0f ? 0f : Mathf.Sin(Time.time * 1.7f) * 0.014f;
+            _visual.localPosition = _baseVisualPosition + new Vector3(0f, breath, 0f);
+            _visual.localRotation = Quaternion.identity;
         }
 
         private void TickAction(float dt)
@@ -187,5 +312,13 @@ namespace DestinyTogether.Presentation
         public static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         /// <summary>Tiling e offset do albedo. x,y = repeticoes; z,w = deslocamento.</summary>
         public static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
+
+        /// <summary>Albedo. URP usa _BaseMap; shaders legados usam _MainTex.</summary>
+        public static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
+        public static readonly int MainTex = Shader.PropertyToID("_MainTex");
+        public static readonly int BumpMap = Shader.PropertyToID("_BumpMap");
+        public static readonly int MetallicGlossMap = Shader.PropertyToID("_MetallicGlossMap");
+        public static readonly int Smoothness = Shader.PropertyToID("_Smoothness");
+        public static readonly int Metallic = Shader.PropertyToID("_Metallic");
     }
 }

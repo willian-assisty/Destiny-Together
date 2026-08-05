@@ -38,21 +38,24 @@ namespace DestinyTogether.EditorTools
         /// (classe de herói, malha, largura em células, teto de altura em células)
         ///
         /// Herói é o único caso em que o teto de altura é o valor que MANDA, e a razão é a pose:
-        /// medido, o Azure Sentinel tem 1,90 de envergadura por 1,40 de altura — braços abertos
-        /// em T. Normalizar pela largura faria um personagem em T-pose sair baixinho e, no dia em
-        /// que ele for riggado com os braços ao lado do corpo, crescer sozinho. Com a altura
+        /// medido, o Azure Sentinel tem 1,90 de envergadura por 1,40 de altura — braços abertos.
+        /// Normalizar pela largura faria um personagem de braços abertos sair baixinho e, no dia
+        /// em que ele for riggado com os braços ao lado do corpo, crescer sozinho. Com a altura
         /// mandando (largura folgada de propósito), a estatura fica constante em qualquer pose,
         /// que é o que um personagem precisa e um prédio não.
         ///
         /// 1,7 célula casa com as cápsulas de placeholder (1,4-1,6) e ocupa ~12% da altura da
         /// tela na câmera atual (FOV 35 a 22 unidades).
         /// </summary>
-        private static readonly (string def, string path, float cells, float maxHeight)[] Heroes =
+        private static readonly (string def, string name, float cells, float maxHeight)[] Heroes =
         {
             // "Azure Sentinel" -> Guarda: sentinela é quem segura a Linha, e azul já é a cor do
             // assento 0 na gramática de placeholder. O nome do arquivo casou com o design sozinho.
-            (DefaultContent.Guarda, CharacterFolder + "AzureSentinel.fbx", 3.0f, 1.7f),
+            (DefaultContent.Guarda, "AzureSentinel", 3.0f, 1.7f),
         };
+
+        /// <summary>Sufixos dos FBX de animação, na ordem em que entram no controlador.</summary>
+        private static readonly string[] HeroClips = { "Run" };
 
         /// <summary>
         /// (definição, prefab, largura em células, teto de altura em células)
@@ -153,8 +156,10 @@ namespace DestinyTogether.EditorTools
         /// v5: florestas concentradas nas quatro diagonais, miolo do mapa limpo.
         /// v6: mundo procedural — lista de pedreiras e raio de streaming de cenario.
         /// v7: primeiro personagem proprio (Azure Sentinel -> Guarda).
+        /// v8: correcao de eixo do personagem — ele tambem e Z-up, como o pack.
+        /// v9: personagem riggado com clipe de corrida; orientacao passa a ser medida (AutoUpright).
         /// </summary>
-        private const int CurrentSetupVersion = 7;
+        private const int CurrentSetupVersion = 9;
 
         private static void TrySetupOnce()
         {
@@ -209,23 +214,100 @@ namespace DestinyTogether.EditorTools
                 if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
                 if (assetImporter is not ModelImporter importer) return;
 
-                // A malha do Meshy não traz material, textura, esqueleto nem animação. Importar
-                // materiais criaria um .mat vazio por peça; a cor vem do assento do jogador, que
-                // é informação de jogo e não decoração.
+                // O material vem do CharacterSetup, não do FBX: o Meshy referencia a textura por
+                // um caminho da máquina dele (`/tmp/.../Character_output.fbm/texture_0.png`), que
+                // aqui nunca existe. Importar materiais criaria um .mat com textura faltando.
                 importer.materialImportMode = ModelImporterMaterialImportMode.None;
-                importer.importAnimation = false;
-                importer.animationType = ModelImporterAnimationType.None;
                 importer.importCameras = false;
                 importer.importLights = false;
                 importer.importVisibility = false;
-
-                // Escala e altura são resolvidas em runtime pelo VisualFitter, medindo bounds —
-                // mexer no fator aqui só criaria dois lugares que decidem tamanho.
                 importer.isReadable = false;
                 importer.importBlendShapes = false;
-                importer.weldVertices = true;
-                importer.optimizeMeshPolygons = true;
-                importer.optimizeMeshVertices = true;
+
+                // A malha do personagem é `Personagens/Nome/Nome.fbx`; qualquer outro FBX naquela
+                // pasta é clipe. Detectar por "tem underscore no nome" quebraria no primeiro
+                // personagem chamado "Azure_Sentinel".
+                string dir = System.IO.Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
+                bool isClip = !string.IsNullOrEmpty(dir) &&
+                              System.IO.Path.GetFileNameWithoutExtension(assetPath) !=
+                              System.IO.Path.GetFileName(dir);
+
+                // Generic, não Humanoid. O clipe e a malha vêm do MESMO esqueleto, então a
+                // ligação por caminho de transform casa exatamente e não há retarget para dar
+                // errado. Humanoid destravaria a biblioteca do Mixamo, ao custo de um mapeamento
+                // de avatar que pode falhar — troca que vale a pena depois de o jogo rodar, não
+                // antes.
+                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.importAnimation = isClip;
+
+                if (isClip)
+                {
+                    // O clipe não traz malha nova; ele empresta o esqueleto do personagem.
+                    importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
+                    importer.sourceAvatar = FindCharacterAvatar(assetPath);
+                }
+                else
+                {
+                    importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+
+                    // Soldar e otimizar só a malha do personagem. Num FBX de animação isso é
+                    // trabalho jogado fora — ele existe pelas curvas, não pelos vértices.
+                    importer.weldVertices = true;
+                    importer.optimizeMeshPolygons = true;
+                    importer.optimizeMeshVertices = true;
+                }
+            }
+
+            /// <summary>
+            /// Avatar do personagem que este clipe acompanha: `Pasta/Nome/Nome_Run.fbx` empresta
+            /// o esqueleto de `Pasta/Nome/Nome.fbx`. Null na primeira importação, se o clipe
+            /// chegar antes da malha — o Apply reimporta depois e resolve.
+            /// </summary>
+            private static Avatar FindCharacterAvatar(string clipPath)
+            {
+                string folder = System.IO.Path.GetDirectoryName(clipPath)?.Replace('\\', '/');
+                if (string.IsNullOrEmpty(folder)) return null;
+
+                string name = System.IO.Path.GetFileName(folder);
+                foreach (var asset in AssetDatabase.LoadAllAssetsAtPath($"{folder}/{name}.fbx"))
+                    if (asset is Avatar avatar) return avatar;
+
+                return null;
+            }
+
+            /// <summary>Todo clipe de locomoção é cíclico. Sem loop, o herói corre uma vez e congela.</summary>
+            private void OnPreprocessAnimation()
+            {
+                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (assetImporter is not ModelImporter importer) return;
+
+                var clips = importer.defaultClipAnimations;
+                if (clips == null || clips.Length == 0) return;
+
+                for (int i = 0; i < clips.Length; i++) clips[i].loopTime = true;
+                importer.clipAnimations = clips;
+            }
+
+            /// <summary>
+            /// Mapa de normal precisa ser marcado como normal, e os mapas de dados (metallic,
+            /// roughness) precisam sair do espaço sRGB. Errar isso não quebra nada — só deixa a
+            /// iluminação sutilmente errada de um jeito que ninguém liga à caixinha do inspector.
+            /// </summary>
+            private void OnPreprocessTexture()
+            {
+                if (!assetPath.StartsWith(CharacterFolder, System.StringComparison.Ordinal)) return;
+                if (assetImporter is not TextureImporter importer) return;
+
+                string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+
+                if (file.EndsWith("_Normal", System.StringComparison.OrdinalIgnoreCase))
+                    importer.textureType = TextureImporterType.NormalMap;
+                else if (file.EndsWith("_Metallic", System.StringComparison.OrdinalIgnoreCase) ||
+                         file.EndsWith("_Roughness", System.StringComparison.OrdinalIgnoreCase))
+                    importer.sRGBTexture = false;
+
+                // 26 MB de albedo em 4K num personagem que ocupa ~12% da tela é desperdício puro.
+                importer.maxTextureSize = 2048;
             }
         }
 
@@ -260,14 +342,23 @@ namespace DestinyTogether.EditorTools
                 mapped++;
             }
 
-            // Heróis. Sem correção de eixo: ao contrário do Polylised, o FBX do personagem já traz
-            // Lcl Rotation (-90, 0, 0) no próprio nó, e o Unity aplica isso sozinho no import.
-            // Rodar de novo aqui o deitaria.
-            foreach (var (def, path, cells, maxHeight) in Heroes)
+            // Heróis: prefab montado (malha + material URP + Animator), não o FBX cru.
+            //
+            // Sem rotação fixa, e isso é uma correção de rumo. A rotação certa não é propriedade
+            // do projeto, é propriedade de cada arquivo — e muda até dentro do mesmo personagem:
+            // medido, a malha estática do Azure Sentinel veio Z-up (pedia -90 em X) e a versão
+            // riggada veio Y-up (em que o mesmo -90 a deitaria). As duas declaram `UpAxis=Y` e as
+            // duas trazem `Lcl Rotation (-90,0,0)` no nó. Não dá para saber lendo o cabeçalho,
+            // então `AutoUpright` mede e decide em runtime.
+            foreach (var (def, name, cells, maxHeight) in Heroes)
             {
-                var mesh = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (mesh == null) { missing.Add(path); continue; }
-                visuals.Entries.Add(VisualEntry.Create(def, mesh, cells, maxHeight));
+                string folder = $"{CharacterFolder}{name}/";
+                var prefab = CharacterSetup.Build(folder, name, HeroClips);
+                if (prefab == null) { missing.Add($"{folder}{name}.fbx"); continue; }
+
+                var entry = VisualEntry.Create(def, prefab, cells, maxHeight);
+                entry.AutoUpright = true;
+                visuals.Entries.Add(entry);
                 mapped++;
             }
 

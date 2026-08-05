@@ -92,14 +92,26 @@ namespace DestinyTogether.Presentation
                     continue;
                 }
 
-                // Com material próprio (arte texturizada), tinge por property block para não
-                // editar o asset do artista.
+                // Arte TEXTURIZADA fica intocada. Carimbar a cor do assento por cima de um albedo
+                // pintado destruiria justamente o que o artista fez — o personagem viraria uma
+                // silhueta azul chapada e todo o trabalho de textura sumiria.
+                //
+                // A regra "cor diz de que LADO está" continua valendo; o que muda é onde ela vive.
+                // Com arte própria, a distinção entre assentos precisa de um recurso que não
+                // dispute o albedo (anel no chão sob os pés é o candidato óbvio). Enquanto isso
+                // não existe, é melhor ficar sem marcação do que sem arte.
+                if (HasAlbedoTexture(r.sharedMaterial)) continue;
+
                 var block = new MaterialPropertyBlock();
                 r.GetPropertyBlock(block);
                 block.SetColor(ShaderIds.BaseColor, tint);
                 r.SetPropertyBlock(block);
             }
         }
+
+        private static bool HasAlbedoTexture(Material material)
+            => (material.HasProperty(ShaderIds.BaseMap) && material.GetTexture(ShaderIds.BaseMap) != null)
+               || (material.HasProperty(ShaderIds.MainTex) && material.GetTexture(ShaderIds.MainTex) != null);
 
         public GameObject CreateTownHall(Vector3 position, float sizeInCells)
         {
@@ -211,12 +223,16 @@ namespace DestinyTogether.Presentation
             // artista quando não há. Ler a cor base do material comprado é o que impede o
             // feedback de "consertar" a peça com a paleta errada na primeira vez que leva dano.
             var renderer = art.GetComponentInChildren<Renderer>();
-            var baseColor = tintOverride ?? Color.white;
+            var baseColor = Color.white;
 
-            if (!tintOverride.HasValue && renderer != null && renderer.sharedMaterial != null &&
+            if (renderer != null && renderer.sharedMaterial != null &&
                 renderer.sharedMaterial.HasProperty(ShaderIds.BaseColor))
                 baseColor = renderer.sharedMaterial.GetColor(ShaderIds.BaseColor);
+            else if (tintOverride.HasValue)
+                baseColor = tintOverride.Value;
 
+            // Peça riggada traz o próprio Animator: a partir daqui é o clipe que move o corpo.
+            view.SetAnimator(art.GetComponentInChildren<Animator>());
             view.SetVisual(visual.transform, renderer, baseColor);
             return view;
         }

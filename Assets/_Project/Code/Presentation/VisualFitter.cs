@@ -46,6 +46,8 @@ namespace DestinyTogether.Presentation
                 return;
             }
 
+            if (entry.AutoUpright) StandUpright(t, ref bounds);
+
             float footprint = Mathf.Max(bounds.size.x, bounds.size.z);
             float target = entry.TargetCells > 0.01f ? entry.TargetCells : 1f;
             float multiplier = entry.ScaleMultiplier > 0.001f ? entry.ScaleMultiplier : 1f;
@@ -68,6 +70,31 @@ namespace DestinyTogether.Presentation
             // que o artista escolheu, e cada pack escolhe um diferente.
             var offset = new Vector3(-bounds.center.x, -bounds.min.y, -bounds.center.z) * scale;
             t.localPosition = offset + entry.Offset;
+        }
+
+        /// <summary>
+        /// Endireita um humanoide MEDINDO, em vez de confiar numa rotação fixa.
+        ///
+        /// Existe porque a rotação certa não é uma propriedade do projeto, é uma propriedade de
+        /// cada arquivo — e muda até dentro do mesmo personagem. Medido: a malha estática do Azure
+        /// Sentinel veio Z-up (precisava de −90 em X); a versão riggada do MESMO personagem veio
+        /// Y-up (em que o mesmo −90 a deitaria). Os dois declaram `UpAxis=Y` e os dois trazem
+        /// `Lcl Rotation (−90,0,0)` no nó. Não há como saber lendo o cabeçalho.
+        ///
+        /// O invariante que resolve: **gente é sempre mais alta do que funda.** Se a profundidade
+        /// medida passar a altura, a peça está deitada — não importa por quê. Uma correção de −90
+        /// em X e mede de novo.
+        ///
+        /// Note que a LARGURA fica fora da conta de propósito: um personagem de braços abertos é
+        /// mais largo que alto, e usar largura como referência daria falso positivo em T-pose.
+        /// </summary>
+        private static void StandUpright(Transform t, ref Bounds bounds)
+        {
+            if (bounds.size.y >= bounds.size.z) return;
+
+            t.localRotation = Quaternion.Euler(-90f, 0f, 0f) * t.localRotation;
+            if (!TryGetBoundsInParent(t.gameObject, out var corrected)) return;
+            bounds = corrected;
         }
 
         /// <summary>

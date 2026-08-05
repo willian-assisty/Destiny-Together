@@ -2,9 +2,12 @@
   <Project Path="DT.App.csproj" />
   <Project Path="DT.Core.csproj" />
   <Project Path="DT.Sim.csproj" />
+  <Project Path="DT.Editor.csproj" />
   <Project Path="DT.UI.csproj" />
   <Project Path="DT.Data.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="DT.Presentation.csproj" />
   <Project Path="DT.Tests.EditMode.csproj" />
-  <Project Path="DT.Editor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="MeshyAssembly.csproj" />
 </Solution>
