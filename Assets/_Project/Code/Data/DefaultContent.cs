@@ -246,7 +246,12 @@ namespace DestinyTogether.Data
 
             AddHero(new HeroSpec
             {
-                Id = Def(Lenhador), DisplayName = "Lenhador", Class = HeroClass.Lenhador,
+                // O nome segue a ARTE que está em campo, como nos outros dois. Mas aqui há uma
+                // dívida que o blurb do menu deixa à vista de propósito: o kit continua o do
+                // lenhador — colhe 2× mais rápido e carrega 20. Das duas classes livres nenhuma é
+                // conjurador, então o Mago entrou na mais frágil e de maior alcance das duas para
+                // poder ser visto e testado. De que classe ele é continua em aberto.
+                Id = Def(Lenhador), DisplayName = "Mago", Class = HeroClass.Lenhador,
                 MoveSpeed = 7.4f, MaxHealth = 100f, AttackDamage = 10f, AttackRadius = 3.1f,
                 AttackInterval = 0.5f, CarryCapacity = 20f, HarvestSpeedMultiplier = 2f,
                 DepositTime = 0.25f

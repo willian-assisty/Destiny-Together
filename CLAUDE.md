@@ -329,6 +329,40 @@ clipe que "anima", com ossos girando e caminhos casando — só que na pose erra
 Arqueiro, Y e Z batem exatamente e X vem negado, que é a conversão destro→canhoto que o Unity
 aplica a todo FBX (igual para malha e clipe, e portanto invisível).
 
+**Malha gorda é cortada por Mesh LOD, não por vontade.** `CharacterSetup.EnsureMeshBudget` mede os
+triângulos da peça importada e, acima de **60 mil** (o Arqueiro tem 45 mil e desenha bem nesta
+câmera), liga `generateMeshLods` e sobe `maximumMeshLod` até caber. Mesh LOD gera níveis
+simplificados **dentro da mesma malha** — sem LODGroup, sem prefab por nível — e `maximumMeshLod`
+DESCARTA os níveis mais detalhados no import, então a peça passa a existir já simplificada em vez de
+só simplificar de longe.
+
+Não confundir com os vizinhos de nome parecido: `meshCompression` comprime o **armazenamento** e não
+remove um triângulo sequer, e `optimizeMeshPolygons`/`optimizeMeshVertices` só reordenam para
+coerência de cache. Nenhum dos dois responde "a malha é pesada demais".
+
+O resultado é **medido depois do reimport** e vai para o console, com aviso quando não cai: a razão
+de 2 por nível é aproximação do gerador, não contrato, e acreditar que a peça emagreceu sem conferir
+seria o modo de falha silencioso. Botões de runtime: `QualitySettings.meshLodThreshold` (global) e
+`MeshRenderer.forceMeshLod` (por peça).
+
+**Peças que orbitam vão numa subpasta `Cristais/`.** `CharacterSetup` as pendura no **root** do
+personagem e liga `CrystalOrbit`. No root e não num osso: o componente escreve a posição delas em
+espaço de mundo todo frame, então ser filho de um osso somaria a transformação do osso por cima e a
+peça dispararia. É também o que faz a órbita continuar girando com o corpo parado — ela nunca
+dependeu do esqueleto.
+
+A âncora da órbita é **medida em camadas**: osso Humanoid se houver, senão um transform chamado
+`Head`, senão o topo dos bounds da malha. A versão original do script pedia
+`animator.isHuman` + `GetBoneTransform(HumanBodyBones.Head)`, o que não funciona aqui por dois
+motivos independentes — o mago chegou em OBJ (sem esqueleto nenhum) e os personagens riggados daqui
+usam rig **Generic** por decisão registrada, então `isHuman` é sempre falso. O script se desligava
+no `Awake` e as peças nunca giravam, sem sintoma além de uma linha no console. A terceira camada
+sempre responde.
+
+Raio, offset e bob são multiplicados pela **escala do personagem** (`lossyScale`). O `VisualFitter`
+normaliza toda arte importada, então um raio em unidades de mundo daria uma órbita do tamanho errado
+assim que alguém trocasse o modelo por outro de escala diferente.
+
 **Malha sem esqueleto não ganha Animator.** `CharacterSetup` procura `.fbx` e depois `.obj`, e
 quando não há clipe nenhum ele *remove* o Animator do prefab em vez de deixá-lo vazio: Animator
 sem controlador ainda assume as transformações e congela o corpo na pose de bind — apagando até a
@@ -627,9 +661,21 @@ Jogável solo com placeholders: 5 noites, ciclo Dia/Noite de 5+5 min, **mundo pr
 10 prédios, 6 arquétipos de monstro + kaiju, 4 classes de herói, Esconderijos da mata, Ruas,
 Distritos, draft, Escombros, Túmulos, Urnas.
 
-Arte própria em campo: **Sentinela** e **Arqueiro** como heróis, os dois riggados e com ciclo de
-corrida (o Arqueiro veio em GLB e entra pelo conversor); **cinco árvores, três pedras e três
-rochedos** compondo a mata e a pedreira. O nome que aparece no menu descreve o personagem
+Arte própria em campo: **Sentinela**, **Arqueiro** e **Mago** como heróis — os dois primeiros
+riggados e com ciclo de corrida (o Arqueiro veio em GLB e entra pelo conversor), o Mago em prévia
+estática com **três cristais em órbita**; **cinco árvores, três pedras e três rochedos** compondo a
+mata e a pedreira.
+
+O Mago ocupa o slot do Lenhador e isso é **provisório**: das duas classes livres nenhuma é
+conjurador, e o kit continua o do lenhador (colhe 2×, carrega 20). O blurb do menu deixa a
+divergência à vista de propósito.
+
+Ele chegou em duas versões, e a segunda ensinou uma regra: **gerador entrega tudo grudado**. A malha
+nova (55.333 triângulos contra 412.814 da primeira) vinha com os três cristais fundidos ao corpo, e
+cristal fundido não orbita — vira silhueta. `Tools/GlbToFbx/fbxsplit.py` separa por concha, e é o
+mesmo caminho para qualquer peça que precise se mover independente do corpo. Os cristais da malha
+nova têm 76–124 vértices contra ~1.500 dos avulsos antigos, então separar também foi o que os
+deixou baratos. O nome que aparece no menu descreve o personagem
 que o jogador vê, não a classe interna — enquanto todos eram cápsula colorida os dois podiam ser a
 mesma palavra, mas "Arauto" em cima de um arqueiro faz o menu mentir. A constante do `DefaultContent`
 não muda junto: `DefId` vem do hash dela, e renomeá-la invalidaria replay.

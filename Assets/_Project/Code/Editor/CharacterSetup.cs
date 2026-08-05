@@ -33,6 +33,7 @@ namespace DestinyTogether.EditorTools
             if (LoadMesh(folder, name) == null) return null;
 
             EnsureRig(folder, name, clipFbxSuffixes);
+            EnsureMeshBudget(folder, name);
 
             var model = LoadMesh(folder, name);
             var material = BuildMaterial(folder, name);
@@ -128,6 +129,101 @@ namespace DestinyTogether.EditorTools
                     return true;
                 });
             }
+        }
+
+        /// <summary>
+        /// Teto de triangulos de uma peca de personagem.
+        ///
+        /// 60 mil e calibrado pelo que ja esta em campo: o Arqueiro tem 45 mil e desenha bem numa
+        /// camera em que um heroi ocupa ~12% da altura da tela. E o Mago chegou com **412.814** —
+        /// nove vezes isso, para a mesma area de tela.
+        /// </summary>
+        private const int TriangleBudget = 60000;
+
+        /// <summary>
+        /// Corta triangulos de uma malha gorda usando o **Mesh LOD** do proprio Unity.
+        ///
+        /// Mesh LOD gera niveis simplificados DENTRO da mesma malha — sem LODGroup, sem prefabs
+        /// extras, sem objeto por nivel — e o renderizador escolhe o nivel pelo tamanho em tela.
+        /// `maximumMeshLod` e o que resolve o problema aqui: ele DESCARTA os niveis mais
+        /// detalhados no import, entao a peca passa a existir ja simplificada em vez de so
+        /// simplificar de longe.
+        ///
+        /// Vale distinguir do vizinho de nome parecido: `meshCompression` comprime o
+        /// ARMAZENAMENTO e nao remove um triangulo sequer, e `optimizeMesh*` so reordena para
+        /// coerencia de cache. Nenhum dos dois responde "a malha e pesada demais".
+        ///
+        /// Cada nivel tem cerca de metade dos triangulos do anterior, entao o nivel necessario e
+        /// o log2 do excesso. O numero real e MEDIDO depois do reimport e vai para o console — a
+        /// razao de 2 e uma aproximacao do gerador, nao um contrato.
+        /// </summary>
+        private static void EnsureMeshBudget(string folder, string name)
+        {
+            var model = LoadMesh(folder, name);
+            if (model == null) return;
+
+            int before = CountTriangles(model);
+            if (before <= TriangleBudget) return;
+
+            string path = AssetDatabase.GetAssetPath(model);
+            if (AssetImporter.GetAtPath(path) is not ModelImporter importer) return;
+
+            int level = 0;
+            for (int t = before; t > TriangleBudget && level < 4; level++) t /= 2;
+
+            if (importer.generateMeshLods && importer.maximumMeshLod >= level) return;
+
+            importer.generateMeshLods = true;
+            importer.maximumMeshLod = level;
+            importer.SaveAndReimport();
+
+            int after = CountTriangles(LoadMesh(folder, name));
+
+            if (after < before)
+            {
+                Debug.Log($"[CharacterSetup] '{name}': {before:N0} -> {after:N0} triangulos " +
+                          $"(Mesh LOD nivel {level}, teto {TriangleBudget:N0})." +
+                          (after > TriangleBudget
+                              ? "  Ainda acima do teto: a malha precisa vir mais leve da origem."
+                              : ""));
+                return;
+            }
+
+            // Nao caiu. `maximumMeshLod` significa o contrario do que este codigo assume, ou a
+            // malha nao gerou niveis. Avisar em vez de deixar quieto: o modo de falha silencioso
+            // seria acreditar que a peca emagreceu quando ela nao emagreceu.
+            Debug.LogWarning($"[CharacterSetup] '{name}' continua com {after:N0} triangulos depois de " +
+                             $"maximumMeshLod={level}. O corte nao aconteceu — ou o gerador de Mesh LOD " +
+                             $"nao produziu niveis para esta malha, ou o campo conta na direcao oposta " +
+                             $"(nesse caso o conserto e uma linha em EnsureMeshBudget).");
+        }
+
+        /// <summary>
+        /// Triangulos de um modelo importado.
+        ///
+        /// Le <c>GetIndexCount</c> em vez de <c>mesh.triangles</c>: a propriedade aloca um vetor
+        /// com um int por indice, e numa malha de 412 mil triangulos isso e um vetor de 1,2 milhao
+        /// de posicoes criado so para ser contado e descartado.
+        /// </summary>
+        private static int CountTriangles(GameObject model)
+        {
+            if (model == null) return 0;
+
+            long indices = 0;
+            foreach (var filter in model.GetComponentsInChildren<MeshFilter>(true))
+                indices += IndexCount(filter.sharedMesh);
+            foreach (var skinned in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                indices += IndexCount(skinned.sharedMesh);
+
+            return (int)(indices / 3);
+        }
+
+        private static long IndexCount(Mesh mesh)
+        {
+            if (mesh == null) return 0;
+            long total = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++) total += (long)mesh.GetIndexCount(i);
+            return total;
         }
 
         /// <summary>Aplica um ajuste no importador e reimporta se algo mudou.</summary>
@@ -321,6 +417,71 @@ namespace DestinyTogether.EditorTools
         // Prefab
         // ------------------------------------------------------------------------------
 
+        /// <summary>
+        /// Subpasta opcional com pecas que ORBITAM o personagem em vez de fazer parte do corpo.
+        ///
+        /// Subpasta e nao sufixo de arquivo porque a raiz da pasta ja tem dois significados
+        /// ocupados — o arquivo com o nome da pasta e a malha, qualquer outro FBX e clipe — e um
+        /// terceiro significado ali dentro seria mais uma regra para lembrar.
+        /// </summary>
+        private const string CrystalsFolder = "Cristais";
+
+        /// <summary>
+        /// Pendura os cristais no ROOT do personagem e liga o <see cref="CrystalOrbit"/>.
+        ///
+        /// No root, e nao num osso: o componente escreve a posicao deles em espaco de MUNDO todo
+        /// frame, entao ser filho de um osso somaria a transformacao do osso por cima e o cristal
+        /// dispararia. E o mesmo motivo pelo qual a orbita continua girando com o corpo parado —
+        /// ela nunca dependeu do esqueleto.
+        /// </summary>
+        private static void AttachOrbitingCrystals(string folder, GameObject instance, Material material)
+        {
+            string dir = $"{folder}{CrystalsFolder}";
+            if (!Directory.Exists(dir)) return;
+
+            var meshes = new List<GameObject>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { dir }))
+            {
+                var mesh = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+                if (mesh != null) meshes.Add(mesh);
+            }
+
+            if (meshes.Count == 0) return;
+
+            // Ordem estavel: o componente distribui os cristais igualmente pela orbita a partir do
+            // indice, e uma ordem que muda a cada import trocaria quem fica onde sem motivo.
+            meshes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+
+            var transforms = new Transform[meshes.Count];
+
+            for (int i = 0; i < meshes.Count; i++)
+            {
+                var crystal = Object.Instantiate(meshes[i], instance.transform);
+                crystal.name = $"Cristal{i + 1}";
+                crystal.transform.localPosition = Vector3.zero;
+                crystal.transform.localRotation = Quaternion.identity;
+
+                if (material != null)
+                {
+                    foreach (var r in crystal.GetComponentsInChildren<Renderer>(true))
+                    {
+                        var slots = new Material[Mathf.Max(1, r.sharedMaterials.Length)];
+                        for (int s = 0; s < slots.Length; s++) slots[s] = material;
+                        r.sharedMaterials = slots;
+                    }
+                }
+
+                transforms[i] = crystal.transform;
+            }
+
+            var orbit = instance.GetComponent<CrystalOrbit>() ?? instance.AddComponent<CrystalOrbit>();
+            orbit.Crystals = transforms;
+            orbit.Animator = instance.GetComponentInChildren<Animator>();
+
+            Debug.Log($"[CharacterSetup] {meshes.Count} cristais em orbita ligados a " +
+                      $"'{instance.name}'.");
+        }
+
         private static GameObject BuildPrefab(string folder, string name, GameObject model,
                                               Material material, AnimatorController controller,
                                               bool clipsExpected)
@@ -361,6 +522,8 @@ namespace DestinyTogether.EditorTools
                     // FICA: perder a animação é pior que um corpo parado, e o erro já foi logado.
                     Object.DestroyImmediate(animator);
                 }
+
+                AttachOrbitingCrystals(folder, instance, material);
 
                 if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
                 return PrefabUtility.SaveAsPrefabAsset(instance, path);

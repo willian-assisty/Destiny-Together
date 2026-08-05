@@ -132,6 +132,13 @@ namespace DestinyTogether.EditorTools
             // Medido no GLB, ele já vem 1,70 de altura com pivô nos pés — a única peça até agora
             // que chegou na escala e na orientação certas sem precisar de nada.
             (DefaultContent.Arauto, "Arqueiro", 3.0f, 1.8f),
+
+            // Mago -> Lenhador, e este mapeamento é PROVISÓRIO: das duas classes livres (Lenhador
+            // e Golem) nenhuma é um conjurador. O Lenhador entrou por ser o mais frágil dos dois
+            // (100 HP contra 200) e o de maior alcance (3,1 contra 2,7), mas o kit dele continua o
+            // do lenhador — colhe 2× mais rápido e carrega 20. O mago está no jogo para ser visto
+            // e testado; de que classe ele é continua sendo decisão de design.
+            (DefaultContent.Lenhador, "Mago", 3.0f, 1.8f),
         };
 
         /// <summary>Sufixos dos FBX de animação, na ordem em que entram no controlador.</summary>
@@ -227,8 +234,10 @@ namespace DestinyTogether.EditorTools
         /// v14: tokens de escala e de luminancia — heroi 1,8; horda 1,0/1,6/2,4; Kaiju 4,0; escada
         ///      de predios em multiplos de 0,5; mata 3,0; pedra 0,8; Prefeitura 5,5. Chao e tints
         ///      de regiao sobem para a faixa de ambiente 35-55%.
+        /// v15: Mago (previa em OBJ) com cristais em orbita; malha estatica passa a ser soldada
+        ///      e otimizada como a riggada.
         /// </summary>
-        private const int CurrentSetupVersion = 14;
+        private const int CurrentSetupVersion = 15;
 
         private static void TrySetupOnce()
         {
@@ -344,6 +353,20 @@ namespace DestinyTogether.EditorTools
                 {
                     importer.animationType = ModelImporterAnimationType.None;
                     importer.importAnimation = false;
+
+                    // Malha estática ainda paga por soldagem e otimização, e num OBJ ela paga
+                    // MUITO: o formato repete o vértice a cada face que o usa, então o mago chegou
+                    // com 206 mil vértices para 412 mil triângulos. Antes isto ficava só no ramo
+                    // do personagem riggado e a prévia estática saía crua — o caminho mais gordo
+                    // era justamente o que não otimizava.
+                    importer.weldVertices = true;
+                    importer.optimizeMeshPolygons = true;
+                    importer.optimizeMeshVertices = true;
+
+                    // LOD de malha do próprio Unity 6. Não reduz o custo de perto, mas é o que
+                    // impede uma peça de 412 mil triângulos de custar 412 mil quando ocupa 40
+                    // pixels — que é a situação normal de um herói nesta câmera.
+                    importer.generateMeshLods = true;
                     return;
                 }
 

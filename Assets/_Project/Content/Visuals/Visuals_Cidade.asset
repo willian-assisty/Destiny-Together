@@ -15,7 +15,7 @@ MonoBehaviour:
   DisplayName: Cidade sitiada
   Notes: Polylised - Medieval Desert City + Fantasy Forest. Gerado por Destiny Together
     > Aplicar arte importada.
-  SetupVersion: 13
+  SetupVersion: 15
   Entries:
   - DefName: Balestra
     Prefab: {fileID: 1356718791037878, guid: d4bbfcf82f1bd6f43a1ef19c811777fa, type: 3}
@@ -125,6 +125,15 @@ MonoBehaviour:
     MaxHeightCells: 1.8
     KeepOriginalScale: 0
     AutoUpright: 1
+  - DefName: Lenhador
+    Prefab: {fileID: 2317094669696169169, guid: 0a15ab832c7267744a02887e23e50e6f, type: 3}
+    TargetCells: 3
+    ScaleMultiplier: 1
+    Offset: {x: 0, y: 0, z: 0}
+    EulerAngles: {x: 0, y: 0, z: 0}
+    MaxHeightCells: 1.8
+    KeepOriginalScale: 0
+    AutoUpright: 1
   Tree:
     DefName: Arvore
     Prefab: {fileID: 4601894808724078792, guid: 1ef63dc904b798d489601acb31a3f5a2, type: 3}
@@ -200,4 +209,4 @@ MonoBehaviour:
   ScatterMinScale: 0.65
   ScatterMaxScale: 1.6
   ScatterEulerAngles: {x: -90, y: 0, z: 0}
-  GroundTint: {r: 0.69, g: 0.675, b: 0.639, a: 1}
+  GroundTint: {r: 0.592, g: 0.706, b: 0.549, a: 1}

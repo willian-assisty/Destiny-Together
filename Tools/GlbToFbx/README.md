@@ -55,6 +55,27 @@ lados, isso passa.
 Medido no Arqueiro, Y e Z batem exatamente e **X vem negado** — é a conversão destro→canhoto que o
 Unity aplica a todo FBX, igual para malha e clipe, e portanto invisível.
 
+## `fbxsplit.py` — separar peças grudadas
+
+```powershell
+python .\Tools\GlbToFbx\fbxsplit.py entrada.fbx PastaDeSaida
+```
+
+Separa as **conchas** (componentes conexas) de uma malha única em `Mago.obj` + `Cristais/*.obj`.
+
+Existe porque gerador de malha entrega tudo grudado, e peça grudada não orbita: ela vira parte da
+silhueta. O mago veio assim — 11 conchas, sendo 1 corpo de 27.734 vértices, 3 cristais de 76 a 124,
+e 7 cacos degenerados (um deles com um vértice só) que o filtro de 40 vértices descarta.
+
+Cada peça pequena sai **recentrada na própria origem**: o `CrystalOrbit` escreve a posição de mundo
+delas, e uma peça cuja geometria está a meio metro do próprio pivô orbitaria em volta de um ponto
+errado. O script imprime o centro original de cada uma, que é como se descobre o raio que o artista
+tinha em mente.
+
+Cuidado que custou uma tentativa: `Normals` e `UV` neste formato são `IndexToDirect`. O canto do
+polígono aponta para uma entrada da tabela através de `NormalsIndex`/`UVIndex` — ler a tabela
+direto pelo índice do canto estoura o vetor.
+
 ## `gerar_run_arqueiro.py`
 
 O gerador do ciclo de corrida do Arqueiro (autoria do projeto, não deste conversor). Depende de
