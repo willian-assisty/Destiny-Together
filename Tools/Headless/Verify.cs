@@ -25,12 +25,184 @@ internal static class Verify
         MundoEDeterminista();
         MundoStreamaESeLembra();
         MundoTemMataEPedreira();
+        EconomiaNaoDependeDaPaisagem();
+        RegioesDividemOMundo();
         SolCruzaOCeu();
         Console.WriteLine(_falhas == 0
             ? "  todos passaram"
             : $"  {_falhas} FALHA(S)");
         Console.WriteLine();
         return _falhas;
+    }
+
+    /// <summary>
+    /// A economia do mundo e CEGA a paisagem.
+    ///
+    /// E a garantia estrutural que permite mexer em bioma sem medo: se nenhum numero de cenario
+    /// alcanca um spawn, nenhuma tabela de regiao pode mover o balanceamento medido.
+    ///
+    /// O teste existe porque o contrario ja era verdade e ninguem via. Os saques ficavam DENTRO
+    /// dos `&&` (`forest > 0.25f && rng.Next01() < 0.55f`), entao o curto-circuito do C# fazia o
+    /// numero de saques depender da densidade daquele chunk, e o sorteio do Esconderijo caia numa
+    /// posicao diferente do fluxo. Mexer na densidade da mata movia os Esconderijos do mundo.
+    /// </summary>
+    private static void EconomiaNaoDependeDaPaisagem()
+    {
+        var content = new DefaultContent();
+        var center = new Vec2(10.5f, 10.5f);
+        var buffer = new ChunkContent();
+
+        // 1) Gerar COM e SEM props tem de dar exatamente os mesmos spawns. Prova que os dois
+        //    sorteios sao independentes de verdade, e nao so em intencao.
+        int chunks = 0, spawns = 0;
+        bool identico = true;
+
+        for (int cz = -14; cz <= 14 && identico; cz++)
+        {
+            for (int cx = -14; cx <= 14 && identico; cx++)
+            {
+                WorldGen.Generate(4242, cx, cz, content.Arena, center, buffer, includeProps: true);
+                var comProps = buffer.Spawns.ToArray();
+
+                WorldGen.Generate(4242, cx, cz, content.Arena, center, buffer, includeProps: false);
+                var semProps = buffer.Spawns.ToArray();
+
+                chunks++;
+                spawns += semProps.Length;
+
+                if (comProps.Length != semProps.Length) { identico = false; break; }
+                for (int i = 0; i < comProps.Length; i++)
+                {
+                    if (comProps[i].Index == semProps[i].Index &&
+                        comProps[i].Position.X == semProps[i].Position.X &&
+                        comProps[i].Position.Y == semProps[i].Position.Y &&
+                        comProps[i].Amount == semProps[i].Amount) continue;
+                    identico = false;
+                    break;
+                }
+            }
+        }
+
+        Console.WriteLine($"  [economia] {chunks} chunks, {spawns} spawns conferidos");
+        Check(identico, "desenhar a mata nao move um unico Esconderijo");
+
+        // 2) A posicao de um item depende do SLOT dele, nunca de quantos vizinhos existem.
+        //    Antes, `ScatterIn` sacava do mesmo Rng: aceitar o no de madeira deslocava a pedra E o
+        //    Esconderijo daquele chunk.
+        int comparados = 0;
+        bool porSlot = true;
+
+        for (int cz = -14; cz <= 14 && porSlot; cz++)
+        {
+            for (int cx = -14; cx <= 14 && porSlot; cx++)
+            {
+                WorldGen.Generate(4242, cx, cz, content.Arena, center, buffer, includeProps: false);
+                foreach (var s in buffer.Spawns)
+                {
+                    // A posicao tem de cair na janela do chunk com a margem de 2 celulas, e o
+                    // Index tem de ser um dos slots declarados — nunca um contador.
+                    float lx = s.Position.X - cx * WorldGen.ChunkSize;
+                    float lz = s.Position.Y - cz * WorldGen.ChunkSize;
+                    bool dentro = lx >= 2f && lx <= WorldGen.ChunkSize - 2f &&
+                                  lz >= 2f && lz <= WorldGen.ChunkSize - 2f;
+                    bool slotValido = s.Index == WorldGen.SlotWood ||
+                                      s.Index == WorldGen.SlotRock ||
+                                      s.Index == WorldGen.SlotCache;
+                    if (!dentro || !slotValido) { porSlot = false; break; }
+
+                    // O slot bate com o TIPO: madeira sempre no 0, pedra no 1, Esconderijo no 2.
+                    bool coerente = s.IsCache
+                        ? s.Index == WorldGen.SlotCache
+                        : (s.NodeKind == HarvestNodeKind.Arvore ? s.Index == WorldGen.SlotWood
+                                                                : s.Index == WorldGen.SlotRock);
+                    if (!coerente) { porSlot = false; break; }
+                    comparados++;
+                }
+            }
+        }
+
+        Check(porSlot, "cada item ocupa um SLOT fixo, e nao uma posicao numa fila",
+              $"{comparados} itens");
+    }
+
+    /// <summary>
+    /// As regioes dividem o mundo em territorios, e a divisao e a MESMA de qualquer lugar.
+    /// </summary>
+    private static void RegioesDividemOMundo()
+    {
+        var center = new Vec2(10.5f, 10.5f);
+        const int seed = 90210;
+
+        // 1) Determinismo: o mesmo ponto consultado em qualquer ordem da a mesma regiao.
+        bool estavel = true;
+        for (int i = 0; i < 500 && estavel; i++)
+        {
+            var p = new Vec2(-3000f + i * 13.7f, 1800f - i * 9.1f);
+            var a = WorldLattice.RegionAt(seed, p, center);
+            var b = WorldLattice.RegionAt(seed, p, center);
+            if (a != b) estavel = false;
+        }
+        Check(estavel, "a regiao de um ponto e sempre a mesma");
+
+        // 2) A vila e Mata, em qualquer semente. Sem isso a partida comeca cercada de Pantano por
+        //    sorteio, e a medicao de balanceamento vira loteria.
+        bool casaEMata = true;
+        for (int s = 1; s <= 64; s++)
+            if (WorldLattice.RegionAt(s * 7919, center, center) != RegionKind.Mata) casaEMata = false;
+        Check(casaEMata, "a vila nasce em Mata em toda semente");
+
+        // 3) Nenhuma regiao pode ser esvaziada por acidente.
+        //
+        //    Este teste ja foi uma media ponderada das massas, e era um PROXY: no dia em que o teto
+        //    de props triplicou, a media continuou perto de 1 enquanto a densidade absoluta mudou
+        //    tres vezes. Massa e razao, e razao nao mede quantidade. O que importa e o resultado
+        //    absoluto, e ele e medido em `MundoTemMataEPedreira`; aqui fica so a guarda de que
+        //    nenhuma regiao foi zerada — regiao sem nada nao e bioma, e um buraco no mundo.
+        foreach (RegionKind k in Enum.GetValues(typeof(RegionKind)))
+        {
+            var spec = WorldLattice.SpecOf(k);
+            Check(spec.ForestMass > 0.02f && spec.RockMass > 0.02f && spec.Weight > 0.02f,
+                  $"a regiao {k} tem paisagem propria, nao um vazio",
+                  $"mata {spec.ForestMass:0.00} rocha {spec.RockMass:0.00} peso {spec.Weight:0.00}");
+        }
+
+        // 4) Territorio: atravessar o mundo em linha reta encontra varias regioes, e todas as
+        //    quatro existem. Media sobre varios raios e sementes — um raio de uma semente mede
+        //    sorte, nao territorio.
+        var vistas = new HashSet<RegionKind>();
+        int trocasTotais = 0, raios = 0;
+
+        for (int s = 1; s <= 6; s++)
+        {
+            for (int dir = 0; dir < 8; dir++)
+            {
+                double ang = dir * Math.PI / 4.0;
+                var anterior = RegionKind.Mata;
+                int trocas = 0;
+
+                for (int step = 0; step <= 400; step++)
+                {
+                    float d = step * 10f;
+                    var p = new Vec2(center.X + (float)Math.Cos(ang) * d,
+                                     center.Y + (float)Math.Sin(ang) * d);
+                    var r = WorldLattice.RegionAt(s * 7919, p, center);
+                    vistas.Add(r);
+                    if (step > 0 && r != anterior) trocas++;
+                    anterior = r;
+                }
+
+                trocasTotais += trocas;
+                raios++;
+            }
+        }
+
+        float media = trocasTotais / (float)raios;
+        Console.WriteLine($"  [regioes] {raios} travessias de 4000 celulas: " +
+                          $"{media:0.0} trocas em media, {vistas.Count} de 4 regioes vistas");
+
+        Check(vistas.Count == 4, "as quatro regioes existem no mundo", $"{vistas.Count} de 4");
+        Check(media >= 2f && media <= 14f, "regiao e territorio: nem mosaico, nem um bioma so",
+              $"{media:0.0} trocas por travessia");
     }
 
     /// <summary>
@@ -355,6 +527,58 @@ internal static class Verify
         Console.WriteLine($"  [mundo] {total} chunks: {arvores} arvores ({arvores / (float)total:0.0}/chunk, " +
                           $"pico {pico}), {pedras} pedras, {chunksComMata} de mata fechada, " +
                           $"{chunksVazios} clareiras, {variantes.Count} malhas pedidas");
+
+        // Por REGIAO, que e o numero que responde "a floresta densa ficou densa?". A media global
+        // cai de proposito quando entram pasto e pedreira — o que nao pode cair e o nucleo da Mata.
+        var arvoresPorRegiao = new int[4];
+        var pedrasPorRegiao = new int[4];
+        var chunksPorRegiao = new int[4];
+
+        for (int cz = -12; cz <= 12; cz++)
+        {
+            for (int cx = -12; cx <= 12; cx++)
+            {
+                var centro = WorldGen.ChunkCenter(cx, cz);
+                if (Vec2.Distance(centro, center) <
+                    content.Arena.OutskirtsRadius + content.Arena.WorldClearance) continue;
+
+                WorldGen.Generate(777, cx, cz, content.Arena, center, buffer);
+                int r = (int)WorldLattice.RegionAt(777, centro, center);
+                chunksPorRegiao[r]++;
+
+                foreach (var prop in buffer.Props)
+                {
+                    if (prop.Kind is WorldPropKind.Pedra or WorldPropKind.Penhasco) pedrasPorRegiao[r]++;
+                    else arvoresPorRegiao[r]++;
+                }
+            }
+        }
+
+        string[] nomes = { "Mata", "Pedreira", "Pasto", "Pantano" };
+        for (int r = 0; r < 4; r++)
+        {
+            if (chunksPorRegiao[r] == 0) continue;
+            Console.WriteLine($"     {nomes[r],-9} {chunksPorRegiao[r],4} chunks · " +
+                              $"{arvoresPorRegiao[r] / (float)chunksPorRegiao[r],5:0.0} arvores/chunk · " +
+                              $"{pedrasPorRegiao[r] / (float)chunksPorRegiao[r],5:0.0} pedras/chunk");
+        }
+
+        // A Mata tem de ser a mais arborizada e a Pedreira a mais rochosa. Se a tabela for
+        // reajustada e isso inverter, a regiao deixou de significar o que o nome diz.
+        int maisArvores = 0, maisPedras = 0;
+        for (int r = 1; r < 4; r++)
+        {
+            if (chunksPorRegiao[r] == 0) continue;
+            if (arvoresPorRegiao[r] / (float)chunksPorRegiao[r] >
+                arvoresPorRegiao[maisArvores] / (float)Math.Max(1, chunksPorRegiao[maisArvores])) maisArvores = r;
+            if (pedrasPorRegiao[r] / (float)chunksPorRegiao[r] >
+                pedrasPorRegiao[maisPedras] / (float)Math.Max(1, chunksPorRegiao[maisPedras])) maisPedras = r;
+        }
+
+        Check(maisArvores == (int)RegionKind.Mata, "a Mata e a regiao mais arborizada",
+              $"e {nomes[maisArvores]}");
+        Check(maisPedras == (int)RegionKind.Pedreira, "a Pedreira e a regiao mais rochosa",
+              $"e {nomes[maisPedras]}");
 
         Check(arvores > 0 && pedras > 0, "o mundo gera floresta E pedreira");
         Check(chunksVazios > total / 12, "existem clareiras — nao e um borrifo uniforme",

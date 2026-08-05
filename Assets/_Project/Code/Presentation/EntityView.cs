@@ -165,11 +165,31 @@ namespace DestinyTogether.Presentation
         ///
         /// Funciona igual para primitiva e para arte comprada: a posição local é escalada junto,
         /// o que preserva tanto o pivot central da primitiva quanto a base no chão do prefab.
+        ///
+        /// <paramref name="maxWorldHeight"/> é um TETO em células, e existe porque a fusão não
+        /// tem teto do outro lado: <c>BuildSystem</c> faz <c>existing.Tier++</c> sem limite algum,
+        /// então multiplicar a altura a cada fusão é uma progressão geométrica sem fim. Sem o
+        /// teto, um Posto de Vigia de 3,0 chega a 6,2 no quinto tier e passa a Prefeitura — um
+        /// prédio de 1×1 vira a coisa mais alta da vila, escondendo cinco células de tabuleiro.
+        ///
+        /// A altura é medida nos bounds do renderer em vez de deduzida da escala: é a única conta
+        /// que vale igual para a primitiva (onde localScale.y É a altura) e para o prefab de arte
+        /// (onde localScale é um fator de encaixe do VisualFitter e não diz altura nenhuma).
         /// </summary>
-        public void ScaleVisual(Vector3 factor)
+        public void ScaleVisual(Vector3 factor, float maxWorldHeight = 0f)
         {
             var visual = Visual;
             if (visual == null) return;
+
+            if (maxWorldHeight > 0f && _renderer != null)
+            {
+                float current = _renderer.bounds.size.y;
+                if (current > 0.001f)
+                {
+                    float allowed = maxWorldHeight / current;
+                    if (allowed < factor.y) factor.y = Mathf.Max(1f, allowed);
+                }
+            }
 
             visual.localScale = Vector3.Scale(visual.localScale, factor);
             visual.localPosition = Vector3.Scale(visual.localPosition, factor);

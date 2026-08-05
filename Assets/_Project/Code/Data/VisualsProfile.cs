@@ -103,17 +103,63 @@ namespace DestinyTogether.Data
         [Tooltip("Vegetacao: florestas dos cantos e o mundo procedural. Nao afeta a simulacao.")]
         public List<GameObject> ScatterProps = new List<GameObject>();
 
-        [Tooltip("Rocha e penhasco das pedreiras do mundo procedural. Vazio = primitivas.")]
+        [Tooltip("Pedras PEQUENAS das pedreiras do mundo procedural. Vazio = primitivas.")]
         public List<GameObject> QuarryProps = new List<GameObject>();
+
+        /// <summary>
+        /// A cor do chao de cada regiao, na ordem de <c>RegionKind</c>.
+        ///
+        /// Cor do CHAO e nao lista de arte porque, com a mata e a pedreira ja compartilhando o
+        /// mesmo acervo, a diferenca entre as regioes esta na DENSIDADE e na cor — Pasto e campo
+        /// aberto amarelado, Pantano e mata rala e escura. Quando a vegetacao propria de cada uma
+        /// chegar, isto ganha listas ao lado; ate la, o mundo ja le como quatro lugares.
+        ///
+        /// As quatro vivem na faixa de ambiente do token (35–55% de luminância linear, saturação
+        /// abaixo de 25%) e continuam se distinguindo por MATIZ, não por valor. É a maior mudança
+        /// da paleta: as quatro estavam entre 6,3% e 27,3%, ou seja o mundo inteiro era mais
+        /// escuro que o token de horda (12%) ou perto dele — cenário e ameaça no mesmo valor.
+        ///
+        /// O custo, medido: dentro de uma faixa de 35–55% o contraste máximo entre dois elementos
+        /// de ambiente é 1,57×, então mata e campo se separam menos do que antes. A separação que
+        /// o jogo precisa mesmo — cenário contra gameplay — é o que a faixa compra em troca.
+        /// </summary>
+        [Tooltip("Cor do chao por regiao: Mata, Pedreira, Pasto, Pantano.")]
+        public Color[] RegionGroundTints =
+        {
+            new Color(0.592f, 0.706f, 0.549f),   // Mata — #97B48C · L 41,1% · sat 22%
+            new Color(0.690f, 0.675f, 0.639f),   // Pedreira — #B0ACA3 · L 41,4% · sat 7%
+            new Color(0.702f, 0.682f, 0.533f),   // Pasto — #B3AE88 · L 41,6% · sat 24%
+            new Color(0.561f, 0.686f, 0.584f),   // Pantano — #8FAF95 · L 38,7% · sat 18%
+        };
+
+        /// <summary>
+        /// Rochedos GRANDES — os marcos da pedreira.
+        ///
+        /// Lista separada e nao mais uma so, porque `WorldPropKind` sempre distinguiu Pedra de
+        /// Penhasco e a apresentacao ignorava a distincao: os dois sorteavam da mesma lista, entao
+        /// um "penhasco" podia sair do tamanho de um seixo. Com duas listas o tipo volta a
+        /// significar alguma coisa — pedra e o que se ve de perto, rochedo e o que se ve de longe
+        /// e serve de referencia para voltar.
+        /// </summary>
+        [Tooltip("Rochedos GRANDES das pedreiras. Vazio = cai para as pedras pequenas.")]
+        public List<GameObject> CliffProps = new List<GameObject>();
 
         [Header("Mundo procedural")]
         [Tooltip("Raio em CHUNKS (24 celulas) de cenario desenhado em volta do heroi. " +
                  "Cada chunk custa ate ~26 objetos; 5 ja cobre o alcance de visao diurno.")]
         [Range(2, 10)] public int PropRadiusChunks = 5;
 
-        [Tooltip("Largura alvo dos props de pedreira, em celulas.")]
-        public float QuarryTargetCells = 2.6f;
-        public float QuarryMaxHeightCells = 4f;
+        [Tooltip("Largura alvo das pedras pequenas, em celulas.")]
+        public float QuarryTargetCells = 3.0f;
+        [Tooltip("Teto de altura da pedra pequena. 2,0 fica entre o prop pequeno (0,8) e o medio " +
+                 "(3,0) do token: uma pedra de pedreira nao e uma caixa, mas tambem nao e arvore.")]
+        public float QuarryMaxHeightCells = 2f;
+
+        [Tooltip("Largura alvo dos rochedos grandes, em celulas. Marco de terreno, nao obstaculo.")]
+        public float CliffTargetCells = 6.5f;
+        [Tooltip("Teto do rochedo. FORA da tabela de tokens de proposito: e a unica peca maior que " +
+                 "a Prefeitura, e num mundo sem minimapa marco de terreno e o que permite voltar.")]
+        public float CliffMaxHeightCells = 6.5f;
 
         [Tooltip("Total de props, dividido entre as quatro florestas.")]
         [Range(0, 600)] public int ScatterCount = 0;
@@ -129,10 +175,11 @@ namespace DestinyTogether.Data
 
         [Tooltip("Largura alvo de cada prop, em CELULAS. Props de cenario de pack costumam ter " +
                  "dezenas de unidades — sem normalizar, um penhasco cobre a cidade inteira.")]
-        public float ScatterTargetCells = 2.2f;
+        public float ScatterTargetCells = 2.4f;
 
-        [Tooltip("Teto de altura dos props, em celulas. Sem isto uma arvore estreita vira torre.")]
-        public float ScatterMaxHeightCells = 5f;
+        [Tooltip("Teto de altura dos props, em celulas. Sem isto uma arvore estreita vira torre. " +
+                 "3,0 e o 'prop medio' do token de escala — arvore e poste.")]
+        public float ScatterMaxHeightCells = 3f;
 
         [Tooltip("Variacao aleatoria de tamanho aplicada DEPOIS da normalizacao.")]
         public float ScatterMinScale = 0.7f;
@@ -144,7 +191,7 @@ namespace DestinyTogether.Data
         [Header("Tom do chao")]
         [Tooltip("Multiplica a cor do material do chao. Escurecer casa o pack de deserto com a " +
                  "atmosfera noturna sem precisar autorar um material novo.")]
-        public Color GroundTint = new Color(0.45f, 0.44f, 0.42f, 1f);
+        public Color GroundTint = new Color(0.690f, 0.675f, 0.639f, 1f);
 
         private Dictionary<int, VisualEntry> _lookup;
 

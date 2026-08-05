@@ -13,24 +13,24 @@ MonoBehaviour:
   m_Name: Atmosfera_Nebuloso
   m_EditorClassIdentifier: DT.Data::DestinyTogether.Data.AtmosphereProfile
   SunColor: {r: 0.62, g: 0.68, b: 0.85, a: 1}
-  SunIntensity: 0.75
+  SunIntensity: 0.3
   SunAngles: {x: 38, y: 45, z: 0}
   HorizonSunColor: {r: 1, g: 0.58, b: 0.28, a: 1}
   HorizonFogColor: {r: 0.86, g: 0.62, b: 0.44, a: 1}
   SunShadows: 1
   ShadowStrength: 0.75
-  AmbientColor: {r: 0.16, g: 0.18, b: 0.26, a: 1}
+  AmbientColor: {r: 0.204, g: 0.227, b: 0.322, a: 1}
   FogEnabled: 1
-  FogColor: {r: 0.09, g: 0.1, b: 0.14, a: 1}
+  FogColor: {r: 0.114, g: 0.129, b: 0.188, a: 1}
   FogMode: 3
   FogDensity: 0.022
   FogStart: 12
   FogEnd: 48
   Skybox: {fileID: 0}
-  BackgroundColor: {r: 0.05, g: 0.055, b: 0.075, a: 1}
+  BackgroundColor: {r: 0.106, g: 0.118, b: 0.169, a: 1}
   UseSkyboxAsBackground: 0
   DaySunColor: {r: 1, g: 0.96, b: 0.86, a: 1}
-  DaySunIntensity: 1.35
+  DaySunIntensity: 1.05
   DayShadowStrength: 0.55
   DayAmbientColor: {r: 0.52, g: 0.55, b: 0.6, a: 1}
   DayFogColor: {r: 0.72, g: 0.74, b: 0.7, a: 1}

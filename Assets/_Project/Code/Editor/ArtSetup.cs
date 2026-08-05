@@ -54,6 +54,29 @@ namespace DestinyTogether.EditorTools
             "PinheiroNevado",
         };
 
+        /// <summary>Pedras pequenas — o que se vê de perto, dentro da pedreira.</summary>
+        private static readonly string[] Rocks =
+        {
+            "PedraGeometrica",
+            "PedraCume",
+            "PedraMontanha",
+        };
+
+        /// <summary>
+        /// Rochedos grandes — o que se vê de LONGE.
+        ///
+        /// Lista à parte porque `WorldPropKind` sempre separou Pedra de Penhasco e a apresentação
+        /// ignorava a separação, sorteando as duas da mesma lista com a mesma medida. O resultado
+        /// era um "penhasco" do tamanho de um seixo: o tipo existia no código e não existia na
+        /// tela. Num mundo sem fim e sem minimapa, marco de terreno é o que permite voltar.
+        /// </summary>
+        private static readonly string[] Boulders =
+        {
+            "RochedoMonolitico",
+            "RochedoCume",
+            "RochedoFacetado",
+        };
+
         /// <summary>Arte propria do projeto — vale para personagem e cenario.</summary>
         private static bool IsOwnArt(string path)
             => path.StartsWith(CharacterFolder, System.StringComparison.Ordinal) ||
@@ -66,11 +89,11 @@ namespace DestinyTogether.EditorTools
         /// jogavel — e a lista de clipes vazia e o que separa uma coisa da outra. Manter dois
         /// montadores quase iguais custaria a proxima correcao ser feita so em um deles.
         /// </summary>
-        private static List<GameObject> BuildTrees(List<string> missing, ref int mapped)
+        private static List<GameObject> BuildNature(string[] names, List<string> missing, ref int mapped)
         {
-            var built = new List<GameObject>(Trees.Length);
+            var built = new List<GameObject>(names.Length);
 
-            foreach (var name in Trees)
+            foreach (var name in names)
             {
                 string folder = $"{NatureFolder}{name}/";
                 var prefab = CharacterSetup.Build(folder, name);
@@ -93,21 +116,22 @@ namespace DestinyTogether.EditorTools
         /// mandando (largura folgada de propósito), a estatura fica constante em qualquer pose,
         /// que é o que um personagem precisa e um prédio não.
         ///
-        /// 1,7 célula casa com as cápsulas de placeholder (1,4-1,6) e ocupa ~12% da altura da
-        /// tela na câmera atual (FOV 35 a 22 unidades).
+        /// 1,8 célula é o token de escala do player, e agora as cápsulas de placeholder valem o
+        /// mesmo — os quatro heróis têm a MESMA estatura e se distinguem pela largura. Ocupa ~13%
+        /// da altura da tela na câmera atual (FOV 35 a 22 unidades).
         /// </summary>
         private static readonly (string def, string name, float cells, float maxHeight)[] Heroes =
         {
             // "Azure Sentinel" -> Guarda: sentinela é quem segura a Linha, e azul já é a cor do
             // assento 0 na gramática de placeholder. O nome do arquivo casou com o design sozinho.
-            (DefaultContent.Guarda, "AzureSentinel", 3.0f, 1.7f),
+            (DefaultContent.Guarda, "AzureSentinel", 3.0f, 1.8f),
 
             // Arqueiro -> Arauto, que é a classe de alcance do jogo: o mais rápido (8,8), o mais
             // frágil (85 HP) e o de MAIOR raio de ataque. Arqueiro é exatamente esse kit.
             //
             // Medido no GLB, ele já vem 1,70 de altura com pivô nos pés — a única peça até agora
             // que chegou na escala e na orientação certas sem precisar de nada.
-            (DefaultContent.Arauto, "Arqueiro", 3.0f, 1.7f),
+            (DefaultContent.Arauto, "Arqueiro", 3.0f, 1.8f),
         };
 
         /// <summary>Sufixos dos FBX de animação, na ordem em que entram no controlador.</summary>
@@ -123,70 +147,51 @@ namespace DestinyTogether.EditorTools
         /// </summary>
         private static readonly (string def, string path, float cells, float maxHeight)[] Buildings =
         {
-            // Torres: três silhuetas diferentes para três funções diferentes.
-            (DefaultContent.Balestra,         City + "prefab_unique_buildings/castle_tower_round.prefab",       1.0f, 2.6f),
-            (DefaultContent.TorreDeGelo,      City + "prefab_unique_buildings/castle_tower_octagon.prefab",     1.0f, 2.6f),
-            (DefaultContent.BalistaDeImpacto, City + "prefab_unique_buildings/castle_tower_rectangular.prefab", 1.0f, 2.2f),
-            (DefaultContent.PostoDeVigia,     City + "prefab_unique_buildings/citadel_tower_a.prefab",          0.85f, 3.2f),
+            // A ESCADA de altura é a mesma do placeholder (PlaceholderVisuals), em múltiplos de
+            // 0,5: 1,0 base · 1,5 utilitário · 2,0 torre · 3,0 vigia · 5,5 Prefeitura. Com arte, o
+            // teto é `maxHeight`; a largura (`cells`) fica folgada para a altura ser quem amarra.
+
+            // Torres: três silhuetas diferentes para três funções diferentes, MESMA altura — qual
+            // torre é qual já é dito pela forma, e a gramática reserva forma para função.
+            (DefaultContent.Balestra,         City + "prefab_unique_buildings/castle_tower_round.prefab",       1.0f, 2.0f),
+            (DefaultContent.TorreDeGelo,      City + "prefab_unique_buildings/castle_tower_octagon.prefab",     1.1f, 2.0f),
+            (DefaultContent.BalistaDeImpacto, City + "prefab_unique_buildings/castle_tower_rectangular.prefab", 1.0f, 2.0f),
+            (DefaultContent.PostoDeVigia,     City + "prefab_unique_buildings/citadel_tower_a.prefab",          0.85f, 3.0f),
 
             // Braseiro é literalmente uma fogueira presa — e ainda emite luz no escuro.
-            (DefaultContent.Braseiro,         City + "prefab_props/fire_cage.prefab",                           0.8f, 1.4f),
+            (DefaultContent.Braseiro,         City + "prefab_props/fire_cage.prefab",                           1.0f, 1.5f),
 
             // Muralha: peça de parede de verdade, baixa e larga.
-            (DefaultContent.Muralha,          City + "prefab_unique_buildings/castle_wall_5m.prefab",           1.0f, 1.2f),
+            (DefaultContent.Muralha,          City + "prefab_unique_buildings/castle_wall_5m.prefab",           1.0f, 1.0f),
 
             // Produção: casas civis. Não atiram, então não podem parecer que atiram.
-            (DefaultContent.Serraria,         City + "prefab_civilian_buildings/civilian_house_03.prefab",      1.0f, 1.6f),
-            (DefaultContent.Pedreira,         City + "prefab_civilian_buildings/civilian_house_11.prefab",      1.0f, 1.6f),
-            (DefaultContent.Oficina,          City + "prefab_civilian_buildings/civilian_house_19.prefab",      1.0f, 1.6f),
+            (DefaultContent.Serraria,         City + "prefab_civilian_buildings/civilian_house_03.prefab",      1.0f, 1.0f),
+            (DefaultContent.Pedreira,         City + "prefab_civilian_buildings/civilian_house_11.prefab",      1.05f, 1.0f),
+            (DefaultContent.Oficina,          City + "prefab_civilian_buildings/civilian_house_19.prefab",      1.0f, 1.5f),
 
-            // Depósito: pilha de barris lê como armazenamento à primeira vista.
-            (DefaultContent.Deposito,         City + "prefab_props/barrel_group.prefab",                        1.0f, 1.0f),
+            // Depósito: pilha de barris lê como armazenamento à primeira vista. O token de "prop
+            // pequeno" (barril, caixa) é 0,8, e a malha chega a 0,70 dentro de 1 célula de largura.
+            (DefaultContent.Deposito,         City + "prefab_props/barrel_group.prefab",                        1.0f, 0.8f),
         };
 
         // Medido no FBX com o eixo correto (Z para cima): 6047 x 3651 de base por 6911 de ALTURA.
         // A citadela sempre foi a peça mais vertical e monumental do pack — ela só entrava
         // tombada. Trocá-la por uma igreja tratava o sintoma; corrigir o eixo resolve a causa.
         private const string TownHallPath = City + "prefab_unique_buildings/citadel_main.prefab";
-        private const string TreePath     = City + "prefab_trees/dead_tree_a.prefab";
-        private const string RockPath     = City + "prefab_terrain/cliff_01.prefab";
         private const string ChestPath    = City + "prefab_props/box.prefab";
 
-        // Grama (não terra) + tint de grama morta: a textura dá a quebra visual que areia lisa
-        // não dava, e o tint faz o verde virar palha seca sem precisar autorar material novo.
-        private const string GroundMat    = Forest + "Materials/grass01.mat";
-        private static readonly Color DeadGrassTint = new Color(0.40f, 0.35f, 0.21f, 1f);
-
         /// <summary>
-        /// A mata das quatro florestas. SÓ árvores — penhascos e barris entravam aqui antes e
-        /// poluíam a leitura: floresta tem que se ler como floresta à primeira olhada, senão
-        /// deixa de marcar "aqui se colhe" e vira ruído no campo de visão.
+        /// Verde dessaturado #97B48C. Cor CHAPADA, sem textura.
         ///
-        /// Mortas dominam (o clima é de cidade sitiada), com pinheiros para quebrar a silhueta.
+        /// O chão passou a ser uma malha facetada, e ali o volume vem das NORMAIS: cada triângulo
+        /// pega a luz de um jeito. Textura por cima disso brigaria com a faceta em vez de somar —
+        /// é o mesmo motivo pelo qual a referência low-poly não tem textura nenhuma.
+        ///
+        /// Tem de ser IGUAL a <c>BoardRenderer.GrassColor</c> e a <c>RegionGroundTints[0]</c>: as
+        /// três são a mesma superfície por caminhos diferentes, e divergir faz o chão mudar de cor
+        /// conforme o perfil visual esteja ou não carregado.
         /// </summary>
-        private static readonly string[] ScatterPaths =
-        {
-            City + "prefab_trees/dead_tree_b.prefab", City + "prefab_trees/dead_tree_c.prefab",
-            City + "prefab_trees/dead_tree_d.prefab", City + "prefab_trees/dead_tree_e.prefab",
-            City + "prefab_trees/dead_tree_f.prefab", City + "prefab_trees/dead_tree_g.prefab",
-            City + "prefab_trees/dead_tree_h.prefab", City + "prefab_trees/dead_tree_i.prefab",
-            City + "prefab_trees/dead_tree_j.prefab",
-            City + "prefab_trees/pine_a.prefab",      City + "prefab_trees/pine_b.prefab",
-            City + "prefab_trees/pine_c.prefab",      City + "prefab_trees/pine_d.prefab",
-        };
-
-        /// <summary>
-        /// As pedreiras do mundo procedural. Penhascos e afloramentos voltam AQUI — eles poluíam
-        /// a floresta quando estavam misturados na mesma lista, mas como bioma próprio fazem o
-        /// oposto: dão ao jogador um segundo tipo de lugar, reconhecível de longe, para onde ir.
-        /// </summary>
-        private static readonly string[] QuarryPaths =
-        {
-            City + "prefab_terrain/cliff_01.prefab", City + "prefab_terrain/cliff_02.prefab",
-            City + "prefab_terrain/cliff_03.prefab", City + "prefab_terrain/cliff_04.prefab",
-            City + "prefab_terrain/rock_01.prefab",  City + "prefab_terrain/rock_02.prefab",
-            City + "prefab_terrain/rock_03.prefab",
-        };
+        private static readonly Color GrassTint = new Color(0.592f, 0.706f, 0.549f, 1f);
 
         // ------------------------------------------------------------------------------
 
@@ -216,8 +221,14 @@ namespace DestinyTogether.EditorTools
         /// v9: personagem riggado com clipe de corrida; orientacao passa a ser medida (AutoUpright).
         /// v10: Arqueiro (previa em OBJ, sem rig) -> Arauto; malha sem esqueleto nao ganha Animator.
         /// v11: cinco arvores proprias na mata; mata fechada; prefab por variante em vez de por tipo.
+        /// v12: mata e pedreira 100% proprias — o pack sai das duas; rochedo ganha lista e medida
+        ///      propria, e Penhasco volta a significar alguma coisa na tela.
+        /// v13: chao facetado low-poly em verde chapado (#4F6B45); sem textura de chao.
+        /// v14: tokens de escala e de luminancia — heroi 1,8; horda 1,0/1,6/2,4; Kaiju 4,0; escada
+        ///      de predios em multiplos de 0,5; mata 3,0; pedra 0,8; Prefeitura 5,5. Chao e tints
+        ///      de regiao sobem para a faixa de ambiente 35-55%.
         /// </summary>
-        private const int CurrentSetupVersion = 11;
+        private const int CurrentSetupVersion = 14;
 
         private static void TrySetupOnce()
         {
@@ -501,26 +512,45 @@ namespace DestinyTogether.EditorTools
                 mapped++;
             }
 
-            // 4.5 células de largura dentro dos 5x5 da Prefeitura, com folga para a altura ir a 7:
-            // o centro da vila deve ser a coisa mais alta do tabuleiro.
-            visuals.TownHall = MakeEntry("Prefeitura", TownHallPath, 4.5f, 7f, missing, ref mapped);
-            visuals.Tree     = MakeEntry("Arvore",     TreePath,     1.6f, 3.2f, missing, ref mapped);
-            visuals.Rock     = MakeEntry("Rocha",      RockPath,     1.3f, 1.1f, missing, ref mapped);
-            visuals.Chest    = MakeEntry("Bau",        ChestPath,    0.9f, 0.9f, missing, ref mapped);
+            // 5,0 células de largura dentro dos 5x5 da Prefeitura, altura 5,5: o centro da vila
+            // continua a coisa mais alta do TABULEIRO, agora por margem verificável — acima do
+            // Kaiju (4,0) e do teto de torre fundida (4,0, ver PresentationDirector).
+            visuals.TownHall = MakeEntry("Prefeitura", TownHallPath, 5.0f, 5.5f, missing, ref mapped);
+            // Baú é "prop pequeno" no token de escala: 0,8.
+            visuals.Chest    = MakeEntry("Bau",        ChestPath,    1.2f, 0.8f, missing, ref mapped);
 
-            visuals.GroundMaterial = AssetDatabase.LoadAssetAtPath<Material>(GroundMat);
-            if (visuals.GroundMaterial == null) missing.Add(GroundMat);
-            visuals.GroundTint = DeadGrassTint;
+            // Sem material de textura: o chão é malha facetada de cor chapada. O campo continua no
+            // perfil para quem quiser voltar atrás, mas o setup não o preenche mais.
+            visuals.GroundMaterial = null;
+            visuals.GroundTint = GrassTint;
 
-            // As arvores proprias primeiro, as do pack depois. A ordem importa porque a variante
-            // sorteada indexa a lista: com as nossas na frente, elas dominam a mata mesmo se um
-            // pack for removido — e se as nossas sumirem, o pack cobre o buraco sem deixar o mundo
-            // pelado.
-            visuals.ScatterProps = BuildTrees(missing, ref mapped)
-                .Concat(ScatterPaths
-                    .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
-                    .Where(g => g != null))
-                .ToList();
+            // As quatro cores de chao NUNCA eram escritas aqui: o asset ficava com o que quer que
+            // tivesse sido serializado, e como e ele que o BoardRenderer le, mudar a cor em codigo
+            // nao mudava nada na tela. Agora o setup e a fonte, e as quatro vivem na faixa de
+            // ambiente do token (35-55% de luminancia linear, dessaturadas).
+            visuals.RegionGroundTints = new[]
+            {
+                GrassTint,                                  // Mata — #97B48C · L 41,1%
+                new Color(0.690f, 0.675f, 0.639f, 1f),      // Pedreira — #B0ACA3 · L 41,4%
+                new Color(0.702f, 0.682f, 0.533f, 1f),      // Pasto — #B3AE88 · L 41,6%
+                new Color(0.561f, 0.686f, 0.584f, 1f),      // Pantano — #8FAF95 · L 38,7%
+            };
+
+            // SÓ a mata própria. As árvores mortas e os pinheiros do pack saíram da lista: eram do
+            // deserto, e conviviam mal com uma floresta viva — misturados, a mata lia como duas
+            // florestas sobrepostas em vez de uma. Um bioma tem de parecer um bioma.
+            var trees = BuildNature(Trees, missing, ref mapped);
+            var rocks = BuildNature(Rocks, missing, ref mapped);
+            var boulders = BuildNature(Boulders, missing, ref mapped);
+
+            visuals.ScatterProps = trees;
+
+            // O nó COLHÍVEL usa a mesma arte do cenário, e por isso entra MENOR: 1,6 célula contra
+            // 2,2 da mata, 1,3 contra 2,6 da pedreira. É o que sobrou para dizer "esta dá para
+            // colher" agora que a arte do pack saiu — a diferença de tamanho é real, mas é fraca, e
+            // um anel no chão sob o nó resolveria isso muito melhor.
+            visuals.Tree = NatureEntry("Arvore", trees.FirstOrDefault(), 1.8f, 3.0f, missing, ref mapped);
+            visuals.Rock = NatureEntry("Rocha", rocks.FirstOrDefault(), 1.6f, 0.8f, missing, ref mapped);
             // 440 arvores divididas por quatro florestas = 110 cada, num circulo de raio 13: uma
             // arvore a cada ~4,8 celulas. E a mesma densidade do nucleo do mundo procedural, para
             // que o bosque da vila e o cinturao que vem logo depois leiam como a MESMA floresta.
@@ -529,16 +559,26 @@ namespace DestinyTogether.EditorTools
             visuals.ForestRadius = 13f;
             visuals.ForestDensityBias = 0.72f;
             visuals.ForestClearing = 4f;
-            visuals.ScatterTargetCells = 2.2f;
-            visuals.ScatterMaxHeightCells = 5f;
-            // Pedreiras do mundo procedural. Ausente na pasta = cai para primitiva sozinho, e o
-            // mundo continua existindo — nunca ha um estado "meio migrado" em que a mata some.
-            visuals.QuarryProps = QuarryPaths
-                .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
-                .Where(g => g != null)
-                .ToList();
-            visuals.QuarryTargetCells = 2.6f;
-            visuals.QuarryMaxHeightCells = 4f;
+            visuals.ScatterTargetCells = 2.4f;
+            // 3,0 é o "prop médio" (árvore, poste) do token de escala. Era 5,0, e a diferença
+            // aparece: uma árvore de 5 metros ao lado de um herói de 1,8 lê como floresta de
+            // gigantes, não como mata que se atravessa.
+            visuals.ScatterMaxHeightCells = 3f;
+            // Pedreiras do mundo procedural, agora em DUAS listas. Ausente na pasta = cai para
+            // primitiva sozinho, e o mundo continua existindo — nunca ha um estado "meio migrado"
+            // em que a pedreira some.
+            visuals.QuarryProps = rocks;
+            visuals.CliffProps = boulders;
+
+            visuals.QuarryTargetCells = 3.0f;
+            visuals.QuarryMaxHeightCells = 2f;
+
+            // 6,5 celulas: o rochedo tem de ler como MARCO a meia tela de distancia, senao ele e
+            // so uma pedra grande. E o unico prop do mundo maior que a Prefeitura (5,5 de altura),
+            // o que e proposital — a vila e a coisa mais alta do TABULEIRO, nao do mundo. E a
+            // unica peca do jogo deliberadamente FORA da tabela de tokens de escala.
+            visuals.CliffTargetCells = 6.5f;
+            visuals.CliffMaxHeightCells = 6.5f;
             visuals.PropRadiusChunks = 5;
 
             visuals.ScatterMinScale = 0.65f;
@@ -559,7 +599,8 @@ namespace DestinyTogether.EditorTools
             Debug.Log(ArtValidator.Validate(visuals));
 
             Debug.Log($"[Destiny Together] Arte aplicada: {mapped} pecas mapeadas, " +
-                      $"{visuals.ScatterProps.Count} props de mata + {visuals.QuarryProps.Count} de pedreira " +
+                      $"{visuals.ScatterProps.Count} arvores + {visuals.QuarryProps.Count} pedras + " +
+                      $"{visuals.CliffProps.Count} rochedos " +
                       $"({visuals.ScatterCount} instancias nas florestas da vila, mundo procedural sob demanda). " +
                       (missing.Count == 0
                           ? "Nada faltando."
@@ -577,6 +618,26 @@ namespace DestinyTogether.EditorTools
         /// muralhas, casas, props e árvores.
         /// </summary>
         private static readonly Vector3 PolylisedUpright = new Vector3(-90f, 0f, 0f);
+
+        /// <summary>
+        /// Entrada de um nó colhível a partir de um prefab já montado.
+        ///
+        /// Existe separada de <see cref="MakeEntry"/> porque aquela carrega por CAMINHO, e a arte
+        /// própria é construída em tempo de setup — pedir o prefab pelo caminho funcionaria só a
+        /// partir da segunda execução, e falharia em silêncio na primeira.
+        ///
+        /// Os FBX do Meshy vêm Z-up, medido, exatamente como o pack: mesma correção de eixo.
+        /// </summary>
+        private static VisualEntry NatureEntry(string defName, GameObject prefab, float cells,
+                                               float maxHeight, List<string> missing, ref int mapped)
+        {
+            if (prefab == null) { missing.Add($"{defName}: nenhum prefab de natureza disponivel"); return default; }
+
+            mapped++;
+            var entry = VisualEntry.Create(defName, prefab, cells, maxHeight);
+            entry.EulerAngles = PolylisedUpright;
+            return entry;
+        }
 
         private static VisualEntry MakeEntry(string defName, string path, float cells, float maxHeight,
                                              List<string> missing, ref int mapped)

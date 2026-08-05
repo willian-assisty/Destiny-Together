@@ -139,6 +139,17 @@ namespace DestinyTogether.App
             var local = _sim.State.GetPlayer(new PlayerId(setup.LocalPlayerIndex));
             if (local != null) local.DisplayName = "Voce";
 
+            // O relevo do chão, ANTES de qualquer view existir: tudo que pisa no chão nasce já na
+            // altura certa, em vez de aparecer no plano e ser corrigido no frame seguinte.
+            //
+            // Chapado dentro dos Arredores. O tabuleiro é uma grade de peças de 1×1 e prédio em
+            // terreno inclinado ou flutua ou afunda; o anel também fica plano porque é onde os
+            // pilares de Faixa marcam a ameaça, e pilar tortо lê como bug. A vila é construída, o
+            // lado de fora é bruto — e a fronteira entre os dois vira leitura de graça.
+            GridToWorld.Ground = new GroundShape(_sim.State.CityCenter,
+                                                 _content.Arena.OutskirtsRadius,
+                                                 BoardRenderer.Relief);
+
             _worldRoot = new GameObject("World");
             _presentation = new PresentationDirector(_sim, _worldRoot.transform, Visuals);
             _input = new InputRouter(_sim, _camera, _presentation.Board, new PlayerId(setup.LocalPlayerIndex));

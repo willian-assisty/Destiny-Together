@@ -132,10 +132,17 @@ namespace DestinyTogether.Presentation
             box.name = "Prefeitura";
             Object.Destroy(box.GetComponent<Collider>());
             box.transform.SetParent(_root, false);
-            box.transform.localScale = new Vector3(sizeInCells * 0.92f, 1.6f, sizeInCells * 0.92f);
-            box.transform.position = position + Vector3.up * 0.8f;
+            // 5,5 celulas: a Prefeitura e a coisa mais alta do TABULEIRO, acima do Kaiju (4,0) e
+            // de qualquer torre fundida (teto de 4,0 em PresentationDirector). O caminho sem arte
+            // tem de dizer a mesma hierarquia que o caminho com arte, senao a leitura de silhueta
+            // muda conforme o pack esteja importado ou nao.
+            box.transform.localScale = new Vector3(sizeInCells * 0.92f, 5.5f, sizeInCells * 0.92f);
+            box.transform.position = position + Vector3.up * 2.75f;
+            // #B8AB90, L 41,5% — na faixa de ambiente. Era #E0D18C a 63,5%, ou seja um bloco de
+            // 5x5 celulas mais claro que player.primary (58%), gold (60%) e heal (60%): no caminho
+            // sem arte o cenario era o objeto mais claro da tela.
             box.GetComponent<Renderer>().sharedMaterial =
-                _placeholders.GetMaterial(new Color(0.88f, 0.82f, 0.55f));
+                _placeholders.GetMaterial(new Color(0.722f, 0.672f, 0.563f));
             return box;
         }
 

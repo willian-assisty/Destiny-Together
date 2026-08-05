@@ -28,6 +28,12 @@ namespace DestinyTogether.Sim
         /// precisam ver a mesma arvore no mesmo lugar sem trocar um byte sobre ela.
         /// </summary>
         public int Variant;
+
+        /// <summary>
+        /// De que regiao esta peca e. Sai do gerador junto com a posicao para a apresentacao nao
+        /// ter de reconsultar a malha por prop — sao ate 120 por chunk.
+        /// </summary>
+        public RegionKind Region;
     }
 
     /// <summary>Um no colhivel ou um Esconderijo que um chunk quer que exista.</summary>
@@ -90,12 +96,36 @@ namespace DestinyTogether.Sim
         /// Candidatos por chunk. Cada um so vira arvore com probabilidade igual a densidade local,
         /// entao isto e o TETO de um nucleo fechado, nao a media.
         ///
-        /// 120 num chunk de 24x24 celulas da uma arvore a cada ~2,2 celulas — com copa de 2,2
-        /// celulas, e mata fechada de verdade: da para se perder dentro. O numero so e pagavel
-        /// porque a densidade cai em degrade (ver <see cref="Ramp"/>): a maior parte do mundo fica
-        /// bem abaixo do teto, e clareira continua sendo clareira.
+        /// 360 num chunk de 24x24 celulas da uma arvore a cada ~1,3 celula no nucleo — com copa de
+        /// 2,2, as copas se sobrepoem e a mata fecha de verdade: nao da para ver atraves. O numero
+        /// so e pagavel porque a densidade cai em degrade (ver <see cref="Ramp"/>), entao a maior
+        /// parte do mundo fica bem abaixo do teto e clareira continua sendo clareira.
+        ///
+        /// E so e pagavel na TELA porque prop de cenario nao e mais um GameObject: ele virou uma
+        /// matriz numa lista, desenhada por instancing (ver <c>PropBatcher</c>). Com um objeto por
+        /// arvore este numero nao passaria de 120 sem derrubar o frame.
         /// </summary>
-        private const int MaxPropsPerChunk = 120;
+        private const int MaxPropsPerChunk = 360;
+
+        /// <summary>
+        /// SLOTS de spawn. Fixos, e nunca um contador.
+        ///
+        /// `ItemKey` deriva do Index e `ConsumedWorldItems` e a unica memoria do mundo. Com um
+        /// `index++`, no dia em que um chunk deixasse de gerar o no de madeira o Esconderijo
+        /// desceria de 1 para 0 — e todo consumo ja gravado passaria a apontar para outro item.
+        /// Um recurso ressuscita, outro some, sem erro e sem log. Slot fixo elimina a classe.
+        /// </summary>
+        public const int SlotWood = 0, SlotRock = 1, SlotCache = 2;
+
+        /// <summary>
+        /// Muda quando o mapeamento semente -> mundo muda.
+        ///
+        /// Entra no ContentHash porque o handshake de rede compara conteudo, e dois builds com
+        /// geradores diferentes derivariam mundos diferentes da MESMA semente enquanto o handshake
+        /// diz que estao iguais — e `ConsumedWorldItems`, que so guarda chaves, passaria a apontar
+        /// para itens que nao existem no outro lado.
+        /// </summary>
+        public const int WorldVersion = 2;
 
         /// <summary>Ate onde vai o cinturao de mata que emoldura a vila, em celulas.</summary>
         private const float CornerForestRange = 140f;
@@ -266,6 +296,21 @@ namespace DestinyTogether.Sim
             var rng = new Rng(unchecked(seed * 73856093 ^ cx * 19349663 ^ cz * 83492791));
             float x0 = cx * ChunkSize, z0 = cz * ChunkSize;
 
+            // A regiao do chunk INTEIRO, quando da para provar que ele nao encosta numa fronteira.
+            //
+            // A celula de regiao tem 640 celulas e o chunk tem 24, entao a esmagadora maioria dos
+            // chunks esta inteira dentro de uma regiao — resolver a malha por candidato seria
+            // pagar 9 consultas de sitio 360 vezes para receber a mesma resposta.
+            //
+            // A guarda e por DISTANCIA A FRONTEIRA, e nao por "as amostras concordaram": com a
+            // deformacao do dominio a fronteira entra no chunk ondulada, e uma lingua da regiao
+            // vizinha pode passar entre dois pontos de amostra sem ser vista. Meia diagonal do
+            // chunk (17) mais a variacao que o warp introduz (~18) da o limite abaixo.
+            const float SafeMargin = 36f;
+            var chunkCenter = ChunkCenter(cx, cz);
+            var uniform = WorldLattice.RegionAt(seed, chunkCenter, cityCenter, out float margin);
+            bool chunkIsUniform = margin > SafeMargin;
+
             for (int i = 0; i < MaxPropsPerChunk; i++)
             {
                 var p = new Vec2(x0 + rng.Range(0f, ChunkSize), z0 + rng.Range(0f, ChunkSize));
@@ -280,8 +325,14 @@ namespace DestinyTogether.Sim
 
                 if (Vec2.Distance(p, cityCenter) < keepClear) continue;
 
-                float forest = ForestDensity(seed, p, cityCenter, keepClear);
-                float quarry = QuarryDensity(seed, p);
+                // A regiao re-pesa as massas que ja existiam. Ela NAO cria tipo de prop novo e nao
+                // toca em spawn: as regioes se distinguem pela composicao do que ja esta no
+                // projeto (mata cerrada, campo de rocha, campo aberto) mais a cor do chao.
+                var region = chunkIsUniform ? uniform : WorldLattice.RegionAt(seed, p, cityCenter);
+                var mass = WorldLattice.SpecOf(region);
+
+                float forest = ForestDensity(seed, p, cityCenter, keepClear) * mass.ForestMass;
+                float quarry = QuarryDensity(seed, p) * mass.RockMass;
 
                 // Pedreira ganha da floresta onde as duas se sobrepoem: rocha exposta e o que
                 // impede a mata de crescer, e ver os dois misturados leria como bug de mapa.
@@ -294,7 +345,8 @@ namespace DestinyTogether.Sim
                         Position = p,
                         Yaw = yaw,
                         Scale = 0.7f + size * 0.9f,
-                        Variant = variant
+                        Variant = variant,
+                        Region = region
                     });
                 }
                 else if (forest > 0.05f)
@@ -308,7 +360,8 @@ namespace DestinyTogether.Sim
                         // Faixa larga de propósito: mata fechada com todas as arvores do mesmo
                         // tamanho le como padrao de papel de parede, nao como floresta.
                         Scale = 0.65f + size * 0.85f,
-                        Variant = variant
+                        Variant = variant,
+                        Region = region
                     });
                 }
             }
@@ -339,31 +392,50 @@ namespace DestinyTogether.Sim
             // spawnasse no colhivel, a vila ganharia um campo de madeira encostado nela — que e
             // exatamente a regra "nada perto de casa rende com o tempo" indo pelo ralo, e o
             // balanceamento medido junto.
+            // Densidade PURA: sem o cinturao das diagonais E sem o peso da regiao.
+            //
+            // O cinturao e cenario — se ele spawnasse colhivel, a vila ganharia um campo de
+            // madeira encostado nela e a regra "nada perto de casa rende com o tempo" iria pelo
+            // ralo. A regiao fica de fora pelo mesmo motivo levado ao extremo: **regiao muda o que
+            // se VE, nunca o que se GANHA**. Com a economia cega a regiao, nenhuma tabela de bioma
+            // consegue mover o balanceamento medido — a garantia e estrutural, nao um cuidado.
             float forest = ForestDensity(seed, center);
             float quarry = QuarryDensity(seed, center);
-            int index = 0;
+
+            // TODOS os saques, incondicionais e em ordem fixa.
+            //
+            // Antes eles estavam DENTRO dos `&&`, e o curto-circuito do C# fazia o numero de
+            // saques depender da densidade daquele chunk: com pouca mata o saque do no nao
+            // acontecia, e o sorteio do Esconderijo caia numa posicao diferente do fluxo. Ou seja,
+            // mexer na densidade da floresta movia os Esconderijos do mundo inteiro. Era o mesmo
+            // acoplamento que separar os dois Rng tinha ido matar, sobrevivendo dentro do `&&` —
+            // e teria voltado a morder na primeira tabela de biomas.
+            float rollWood = rng.Next01();
+            float rollRock = rng.Next01();
+            float rollCache = rng.Next01();
+            float rollRelic = rng.Next01();
 
             // Nos colhiveis: esparsos e de uso unico. Nao sao o motivo de vir — sao o que se
             // aproveita por estar passando, e o teto de carga do heroi garante que continuem
             // sendo isso.
-            if (forest > 0.25f && rng.Next01() < 0.55f)
+            if (forest > 0.25f && rollWood < 0.55f)
             {
                 into.Spawns.Add(new WorldSpawn
                 {
-                    Index = index++,
-                    Position = ScatterIn(cx, cz, rng),
+                    Index = SlotWood,
+                    Position = SlotPosition(seed, cx, cz, SlotWood),
                     IsCache = false,
                     NodeKind = HarvestNodeKind.Arvore,
                     Amount = arena.WoodPerTree * MathUtil.Lerp(1f, 1.8f, reach)
                 });
             }
 
-            if (quarry > 0.25f && rng.Next01() < 0.6f)
+            if (quarry > 0.25f && rollRock < 0.6f)
             {
                 into.Spawns.Add(new WorldSpawn
                 {
-                    Index = index++,
-                    Position = ScatterIn(cx, cz, rng),
+                    Index = SlotRock,
+                    Position = SlotPosition(seed, cx, cz, SlotRock),
                     IsCache = false,
                     NodeKind = HarvestNodeKind.Rocha,
                     Amount = arena.StonePerRock * MathUtil.Lerp(1f, 1.8f, reach)
@@ -373,13 +445,13 @@ namespace DestinyTogether.Sim
             // Esconderijos: o motivo de vir. Chance e valor sobem com a distancia, e o Relicario
             // so aparece de verdade la fora.
             float cacheChance = MathUtil.Lerp(arena.WorldCacheChanceNear, arena.WorldCacheChanceFar, reach);
-            if (rng.Next01() >= cacheChance) return;
+            if (rollCache >= cacheChance) return;
 
-            bool relic = rng.Next01() < MathUtil.Lerp(0.05f, 0.45f, reach);
+            bool relic = rollRelic < MathUtil.Lerp(0.05f, 0.45f, reach);
             into.Spawns.Add(new WorldSpawn
             {
-                Index = index,
-                Position = ScatterIn(cx, cz, rng),
+                Index = SlotCache,
+                Position = SlotPosition(seed, cx, cz, SlotCache),
                 IsCache = true,
                 CacheKind = relic ? CacheKind.Relicario : CacheKind.Suprimento,
                 Amount = (relic ? arena.XpPerRelicCache : arena.XpPerSupplyCache)
@@ -389,9 +461,22 @@ namespace DestinyTogether.Sim
             });
         }
 
-        /// <summary>Ponto dentro do chunk, com margem para nada nascer colado na borda.</summary>
-        private static Vec2 ScatterIn(int cx, int cz, Rng rng)
-            => new Vec2(cx * ChunkSize + rng.Range(2f, ChunkSize - 2f),
-                        cz * ChunkSize + rng.Range(2f, ChunkSize - 2f));
+        /// <summary>
+        /// Ponto de um SLOT dentro do chunk, com margem para nada nascer colado na borda.
+        ///
+        /// Vem de hash e nao do fluxo do Rng, e a diferenca nao e estilo: com o Rng, aceitar ou
+        /// nao um no deslocava a posicao de todos os itens seguintes daquele chunk. Como funcao de
+        /// (chunk, slot), a posicao de um item independe do que aconteceu com os outros.
+        ///
+        /// Sal distinto por EIXO e por SLOT. Sem isso, os quatro slots cairiam no mesmo ponto, e
+        /// usar (cx,cz) e (cz,cx) para X e Z correlacionaria tudo na diagonal cx==cz.
+        /// </summary>
+        private static Vec2 SlotPosition(int seed, int cx, int cz, int slot)
+        {
+            float u = Hash01(seed ^ (0x9E37 + slot * 2), cx, cz);
+            float v = Hash01(seed ^ (0x9E38 + slot * 2), cx, cz);
+            return new Vec2(cx * ChunkSize + 2f + u * (ChunkSize - 4f),
+                            cz * ChunkSize + 2f + v * (ChunkSize - 4f));
+        }
     }
 }

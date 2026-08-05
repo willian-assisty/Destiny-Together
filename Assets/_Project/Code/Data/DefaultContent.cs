@@ -297,6 +297,13 @@ namespace DestinyTogether.Data
                 foreach (var kv in _heroes) hash = hash * 31 + kv.Key.Value;
                 hash = hash * 31 + Rules.TotalTurns;
                 hash = hash * 31 + Arena.GridSize;
+
+                // O mundo tambem e conteudo. Dois builds com geradores diferentes derivariam
+                // mundos diferentes da mesma semente enquanto o handshake diz que sao iguais — e
+                // `ConsumedWorldItems`, que so guarda chaves, apontaria para itens inexistentes do
+                // outro lado. Um recurso ressuscita, outro some, sem erro e sem log.
+                hash = hash * 31 + WorldGen.WorldVersion;
+                hash = hash * 31 + WorldLattice.TableHash();
                 return hash;
             }
         }

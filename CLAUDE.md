@@ -175,8 +175,12 @@ funciona. Quebrar qualquer uma exige mudar o teste correspondente primeiro.
 
 ## Arte
 
-Packs em uso: **Polylised — Medieval Desert City** (construções, árvores mortas, penhascos,
-props) e **Fantasy Forest Environment Free Sample** (material de terra do chão).
+Packs em uso: **Polylised — Medieval Desert City** (construções e props) e **Fantasy Forest
+Environment Free Sample** (material de terra do chão).
+
+**A mata e a pedreira são 100% arte própria** — as árvores mortas e os penhascos do pack saíram das
+duas listas. Eram do deserto, e conviviam mal com uma floresta viva: misturados, o mundo lia como
+dois biomas sobrepostos em vez de um. Um bioma tem de parecer um bioma.
 
 `Destiny Together > Aplicar arte importada` faz tudo: converte os materiais para URP, monta o
 `VisualsProfile`, cria a atmosfera e liga ambos ao Bootstrap. Roda sozinho na primeira compilação
@@ -190,12 +194,90 @@ que atira. Para trocar qualquer escolha: `Destiny Together > Mapear arte importa
 Monstros continuam em primitivas até a arte deles chegar. Definição sem prefab cai para primitiva
 sozinha — nunca existe um estado "meio migrado" em que o jogo não abre.
 
+### Tokens de escala
+
+Altura é token, não gosto. 1 célula = 1 unidade Unity = 1 metro, e cada coisa tem uma altura:
+
+| | altura |
+|---|---:|
+| swarm (`Enxame`) | 1,0 |
+| comum (`Estourador`, `Bruto`, `Cuspidor`) | 1,6 |
+| elite (`Rondador`, `Ninho`) | 2,4 |
+| **herói** | **1,8** |
+| chefe (`MaeAranha`) | 4,0 |
+| prop pequeno (barril, caixa, pedra, Baú) | 0,8 |
+| prop médio (árvore, poste) | 3,0 |
+
+Prédios não estão na tabela, então têm uma **escada própria em múltiplos de 0,5**: 1,0 base
+(Muralha, Serraria, Pedreira, Depósito) · 1,5 utilitário (Braseiro, Oficina) · 2,0 torre
+(as três de tiro) · 3,0 vigia · 5,5 Prefeitura.
+
+As três torres de tiro ficam na **mesma** altura de propósito: qual torre é qual já é dito pela
+silhueta, e a gramática reserva forma para função. Altura passa a dizer só "isto atira" — e todas
+elas ficam acima do herói (1,8) e de todo comum (1,6), que é a leitura que importa quando a horda
+encosta.
+
+**Duas hierarquias que o código protege.** A Prefeitura é a coisa mais alta do *tabuleiro* e o
+rochedo a mais alta do *mundo*. A primeira estava desprotegida: `BuildSystem` faz `existing.Tier++`
+**sem teto nenhum**, e a apresentação multiplicava a altura a cada fusão — uma progressão
+geométrica que levava um Posto de Vigia a passar a Prefeitura no quinto tier. `MaxMergedHeight`
+(4,0) em `PresentationDirector` fecha isso, medindo os bounds do renderer para valer igual em
+primitiva e em prefab.
+
+**Altura oclui.** Com pitch 50°, um corpo de altura H esconde 0,84·H células de chão atrás de si.
+É a conta a fazer antes de subir qualquer coisa: foi ela que travou o pilar de Faixa em 4,0 (a
+6,0 a telegrafia passava a ocluir o corredor que telegrafa) e é ela que deixa uma dívida aberta no
+Kaiju — ver "Dívidas conhecidas".
+
+### Tokens de cor do ambiente
+
+O cenário inteiro vive entre **35% e 55% de luminância**, dessaturado; todo elemento de gameplay
+vive **fora** dessa faixa, acima ou abaixo. O teste é o print da tela em escala de cinza: se
+jogador, inimigo e pickup não se distinguem, a paleta falhou.
+
+**A métrica é luminância relativa *linear* (WCAG/Rec.709), e isso não é detalhe.** Sob luma gama
+os tokens de inimigo caem em 37–44%, dentro da faixa do ambiente, e a regra não fecha. Só sob a
+linear os onze tokens de gameplay ficam todos fora dela. Medir errado invalida o teste.
+
+O chão era `#4F6B45` = 12,6%, ou seja mais escuro que o token de horda (12%): cenário e ameaça no
+mesmo valor. Hoje é `#97B48C` = 41,1%, e a horda volta a ficar abaixo do chão em que pisa.
+
+**Tile não é cenário.** Os tiles do tabuleiro, o Escombro e o Túmulo ficam deliberadamente
+*abaixo* da faixa — eles dizem onde dá para construir e onde um herói morreu, e o token manda
+gameplay viver fora dela. Um tabuleiro dentro da faixa ficaria a dois níveis de 255 do campo em
+volta, e "a vila é construída, o lado de fora é bruto" deixaria de ser visível. Hoje a fronteira
+vale ~4,8× em luminância.
+
+O custo da faixa, medido e aceito: dentro de 35–55% o contraste máximo entre dois elementos de
+ambiente é 1,57×, então **mata e campo se separam menos** do que antes. A separação que o jogo
+precisa mesmo — cenário contra gameplay — é o que se compra em troca.
+
 ### Cenário próprio
 
 `Assets/_Project/Art/Final/Nature/<Nome>/` — a mesma estrutura de um personagem, sem esqueleto:
 `<Nome>.fbx` mais `Textures/<Nome>_BaseColor|_Normal|_Metallic|_Roughness.png`. Uma linha na tabela
-`Trees` do `ArtSetup` e a peça entra na mata; a ordem da tabela importa, porque a variante sorteada
-indexa a lista e as nossas ficam na frente das do pack.
+certa do `ArtSetup` e a peça entra no mundo:
+
+| tabela | vira | largura alvo |
+|---|---|---|
+| `Trees` | mata (`ScatterProps`) | 2,4 células · teto de **altura** 3,0 |
+| `Rocks` | pedra pequena (`QuarryProps`) | 3,0 · altura 2,0 |
+| `Boulders` | rochedo grande (`CliffProps`) | 6,5 · altura 6,5 |
+
+A largura continua sendo o alvo, mas quem manda agora é a **altura**: os tokens de escala dão
+árvore = 3,0 (prop médio) e o rochedo é a única peça deliberadamente fora da tabela.
+
+**Pedra e rochedo em listas separadas.** `WorldPropKind` sempre distinguiu `Pedra` de `Penhasco`, e a
+apresentação ignorava a distinção: os dois sorteavam da mesma lista com a mesma medida, então um
+"penhasco" saía do tamanho de um seixo — o tipo existia no código e não existia na tela. Num mundo
+sem fim e sem minimapa, marco de terreno é o que permite voltar, e é por isso que o rochedo é a
+única peça do mundo maior que a Prefeitura (6,5 contra 5,5 de altura): a vila é a coisa mais alta do
+**tabuleiro**, não do mundo.
+
+O nó **colhível** usa a mesma arte do cenário e entra menor (1,8 contra 2,4 na mata; 1,6 contra 3,0
+na pedreira). É o que sobrou para dizer "esta dá para colher" agora que a arte do pack saiu — a
+diferença de tamanho é real, mas fraca. Anel no chão sob o nó resolveria muito melhor, e é o mesmo
+recurso que a dívida de "de quem é este herói" está esperando.
 
 O montador é o mesmo dos personagens (`CharacterSetup`), com a lista de clipes vazia — a operação é
 idêntica (FBX texturizado vira peça jogável) e manter dois montadores quase iguais custaria a
@@ -292,7 +374,8 @@ As regras que as duas importações do Azure Sentinel estabeleceram:
   personagem é `MaxHeightCells`. O motivo é a pose: medido, o modelo tem 1,90 de envergadura por
   1,40 de altura — T-pose. Normalizar pela largura faria um personagem em T sair baixinho e, no
   dia em que fosse riggado com os braços ao lado do corpo, crescer sozinho. Deixe `TargetCells`
-  folgado (3.0) e a altura em **1,7 células** — casa com as cápsulas de placeholder e ocupa ~12%
+  folgado (3.0) e a altura em **1,8 células** — o token de escala do player, e o mesmo valor das
+  cápsulas de placeholder, que ocupa ~13%
   da tela na câmera atual.
 - **Orientação é MEDIDA, nunca fixada.** `VisualEntry.AutoUpright` mede os bounds e endireita se
   a profundidade passar a altura — o invariante é que gente é sempre mais alta do que funda.
@@ -339,9 +422,13 @@ entardecer precisa ser contínuo — dois perfis produziriam um corte.
 
 A diferença que mais importa entre dia e noite não é o brilho, é o **alcance de visão**: névoa em
 0.010 abre o horizonte para ~140 unidades e a mata dos cantos fica visível do centro da cidade, o
-que transforma explorar numa escolha informada; em 0.045 o mesmo bosque some, e é isso que faz
-atravessá-lo custar coragem. `FogDensity` noturna acima de ~0.05 começa a apagar os pilares de
-Faixa, que são a telegrafia da ameaça — clima que esconde informação de jogo sai caro.
+que transforma explorar numa escolha informada; em 0.022 o mesmo bosque some, e é isso que faz
+atravessá-lo custar coragem.
+
+**A névoa mede da CÂMERA, não do herói** — e a câmera fica a 18–25 unidades atrás dele. É por isso
+que o teto noturno é bem mais baixo do que parece: medido em `FogDensity` 0.045, sobra 37% de
+visibilidade no *próprio herói* e 8,7% no pilar de Faixa do lado oposto, ou seja a telegrafia da
+ameaça desaparece. Em 0.022 são 79% e 56%. Se a noite precisar fechar mais, o teto é ~0.030.
 
 **O céu é HUD.** O clarear do amanhecer começa exatamente quando os monstros param de nascer
 (`SpawnCutoffBeforeDawn`). Isso é deliberado: "última onda já entrou" e "está clareando" são a mesma
@@ -373,16 +460,61 @@ olhando e apaga o que ficou para trás, chamando `WorldGen` direto — sem passa
 dois streamers têm raios diferentes de propósito: a simulação materializa o que dá para **tocar**
 (`WorldStreamRadiusChunks`, 4 chunks), a tela o que dá para **ver** (`PropRadiusChunks`, 5).
 
-A simulação pede `includeProps: false`: cenário não é entidade, e ela nunca tocou num prop. Isso só
-é seguro porque mata e Esconderijos têm **sorteios independentes** — antes dividiam um `Rng`, e
-mexer na densidade da floresta movia todos os Esconderijos do mundo, levando o balanceamento medido
-junto.
+A simulação pede `includeProps: false`: cenário não é entidade, e ela nunca tocou num prop.
 
-**Mata fechada é contraste, não volume.** O teto é 120 candidatos por chunk de 24×24 (uma árvore a
-cada ~2,2 células no núcleo), mas a média medida fica em 37: o `Ramp` passa por um smoothstep que
-**afasta os dois extremos** — borda de bosque afina, núcleo fecha. Sem ele, subir o teto engrossaria
-o mundo inteiro por igual, e mundo uniformemente denso não tem para onde explorar. Medido em 616
-chunks: pico 120, 25% de mata fechada, 16% de clareira.
+**Regiões: o mundo é dividido por uma malha, não por mais um campo de ruído.** `WorldLattice`
+espalha sítios numa grade de 640 células com jitter; a região de um ponto é a do sítio mais próximo,
+buscado num 3×3. Mais uma camada de ruído daria mancha do mesmo jeito, mas cada bioma novo viraria
+mais uma linha na arbitragem "quem ganha de quem" — em quatro regiões isso já é uma cascata de `if`.
+Com a malha a pergunta é sempre a mesma, e a quinta região é uma linha na tabela. Um sítio também é
+um **centro**, que é o que uma construção especial vai precisar para nascer em algum lugar que
+signifique alguma coisa.
+
+3×3 basta e é demonstrável: com jitter preso em [0,25 .. 0,75] da célula, o sítio da própria célula
+está no máximo a 1,06 célula e qualquer sítio fora do 3×3 está a pelo menos 1,25. Com jitter em
+[0..1] a garantia cai e a fronteira ganha lascas nos cantos. O ponto é **torcido** antes da consulta
+(`domain warp`), senão a fronteira é o lado reto de um polígono de Voronoi e lê como corte de mapa.
+
+**Região muda o que se VÊ, nunca o que se GANHA.** `GenerateProps` aplica as massas da região;
+`GenerateSpawns` usa a densidade pura. Com a economia cega à região, nenhuma tabela de bioma
+consegue mover o balanceamento medido — a garantia é estrutural, não um cuidado. Medido:
+
+| | árvores/chunk | pedras/chunk |
+|---|---:|---:|
+| Mata | **216,8** | 3,8 |
+| Pedreira | 5,0 | **13,8** |
+| Pasto | 17,6 | 2,0 |
+
+A massa média ponderada tem de ficar perto de 1: região **redistribui** a paisagem, não a reduz. A
+primeira tabela tinha todas as massas abaixo de 1 exceto uma, e a medição acusou na hora — 37% das
+árvores e 70% das pedras evaporaram e a mata fechada caiu pela metade. É invariante, não acidente
+(`regiao redistribui a mata, nao a reduz`).
+
+A vila é **sempre Mata**, garantido por um raio de 120 células que fica dentro do cinturão de mata
+que já a emoldura — o círculo é invisível e a partida nunca começa cercada de Pântano por sorteio.
+Viés por raio de *sítio* não garantiria nada: com jitter, o sítio mais próximo da vila pode estar a
+mais de uma célula e pertencer a qualquer vizinho.
+
+**Slots fixos, e nunca um contador.** `ItemKey` deriva do `Index` e `ConsumedWorldItems` é a única
+memória do mundo. Com `index++`, no dia em que um chunk deixasse de gerar o nó de madeira o
+Esconderijo desceria de 1 para 0 — e todo consumo já gravado passaria a apontar para outro item. Um
+recurso ressuscita, outro some, sem erro e sem log.
+
+**Todos os saques são feitos incondicionalmente, em ordem fixa**, e a posição de um item vem de
+`hash(chunk, slot)` e não do fluxo do `Rng`. Os dois consertam a mesma classe de bug: saques dentro
+de um `&&` fazem o curto-circuito do C# acoplar a economia à paisagem, e `ScatterIn` consumindo do
+fluxo fazia aceitar um nó deslocar todos os itens seguintes daquele chunk. `WorldVersion` entra no
+`ContentHash` para que dois builds com geradores diferentes não se digam iguais no handshake.
+
+**Mata fechada é contraste, não volume.** O teto é 360 candidatos por chunk de 24×24, mas a média
+medida fica em 83: o `Ramp` passa por um smoothstep que **afasta os dois extremos** — borda de
+bosque afina, núcleo fecha. Sem ele, subir o teto engrossaria o mundo inteiro por igual, e mundo
+uniformemente denso não tem para onde explorar.
+
+Na **Mata** isso dá **217 árvores por chunk** — uma a cada ~1,3 célula, com copa de 2,2: as copas se
+sobrepõem e não dá para ver através. Fora dela a paisagem ficou onde estava (Pasto 18, Pedreira 14
+pedras): o teto é global, então triplicar só a floresta exigiu dividir as massas das outras regiões
+por três. Densidade de uma região é `massa × teto`, e mexer no teto mexe em todas de uma vez.
 
 Um **cinturão nas quatro diagonais** emoldura a vila logo depois da clareira (`CornerForest`, 140
 células). Nas diagonais e não nos eixos: a horda vem do anel inteiro e os pilares de Faixa são a
@@ -395,25 +527,78 @@ escolha era um hash do `Kind`, todo prop do mesmo tipo desenhava a mesma malha �
 árvores teria produzido uma floresta com duas. Como a variante é função pura da semente, a mata
 continua idêntica ao voltar e igual entre os quatro clientes.
 
-Com mata fechada, atravessar uma fronteira de chunk pede uma **fileira inteira** de chunks de uma
-vez, o que passa de mil árvores no mesmo frame. O streamer gasta um orçamento (`PropsPerFrame`, 300)
-e desenha do mais perto para o mais longe: troca o engasgo por algumas árvores aparecendo na borda
-da tela, que é o lado certo da troca — a borda está longe e em névoa, o engasgo está debaixo da mão
-do jogador. Os materiais de árvore ligam **instancing de GPU**; sem isso cada árvore vira uma
-chamada de desenho e a floresta fica cara pelo motivo errado (CPU, não pixels).
+**Não existe GameObject por árvore.** Foi o que permitiu triplicar a densidade. Com um objeto por
+peça, 217 por chunk vezes 121 chunks desenhados são ~26 mil objetos — e o gargalo não é a GPU (são
+~250 triângulos por árvore), é CPU administrando Transform, hierarquia e culling individual de
+coisas que ninguém toca. Prop de cenário é o caso perfeito para instancing: nunca se move, nunca é
+clicado, nunca entra na simulação. O que sobra dele é uma **matriz**.
 
-Se ficar pesado, os dois botões são `PropRadiusChunks` (quantos chunks aparecem) e
-`MaxPropsPerChunk` (quão fechado é o núcleo) — nessa ordem, porque o primeiro é linear na contagem
-de objetos e não muda o desenho do mundo.
+`PropBatcher` mede o molde de cada prefab **uma vez** (instancia, encaixa com `VisualFitter`, lê
+malha/material/matriz, destrói) e daí em diante uma árvore custa 64 bytes numa lista; o desenho sai
+por `Graphics.RenderMeshInstanced`. A medição passa pelo mesmo `VisualFitter` de propósito:
+reimplementar o encaixe daria duas fórmulas de normalização que divergem no dia em que alguém
+corrigir só uma, e o sintoma seria arte de tamanho diferente conforme o caminho de desenho.
+
+As matrizes são **assadas na montagem**, já com a posição do pedaço dentro do molde embutida. A
+primeira versão multiplicava `matriz × pedaço` na hora de desenhar — 26 mil multiplicações 4×4 por
+frame para produzir sempre o mesmo resultado. Assar troca trabalho por frame por memória, uma vez.
+
+Três descartes, do mais barato para o mais caro:
+
+| | |
+|---|---|
+| **Névoa** | não desenha o que a névoa já esconde. O alcance é lido de `RenderSettings.fogDensity`, então acompanha o ciclo sozinho: ~240 unidades ao meio-dia, ~53 à meia-noite. Rende mais justamente quando mais importa — a noite é quando há 141 monstros vivos disputando o mesmo frame. |
+| **Frustum** | cada chunk é um lote com a própria caixa, então o motor descarta o que está fora da tela sem olhar peça por peça. |
+| **Sombra** | só dentro de 70 unidades. Sombra de árvore a 150 unidades cai fora da cascata mais distante de qualquer jeito, e mandar 26 mil peças para o mapa de sombra custa mais que desenhá-las. |
+
+Descarregar um chunk agora é soltar listas — não há `Destroy` de milhares de objetos, que era o pico
+que atravessar uma fronteira custava. Montar continua com orçamento por frame (`PropsPerFrame`), do
+mais perto para o mais longe: troca o engasgo por algumas árvores aparecendo na borda da tela, que é
+o lado certo da troca.
+
+Se ainda ficar pesado, os botões são `PropRadiusChunks` (quantos chunks aparecem), `ShadowDistance`
+e `MaxPropsPerChunk` — nessa ordem, porque o primeiro é linear na contagem e não muda o desenho do
+mundo, e o último mexe em todas as regiões de uma vez.
 
 Sem os packs de arte a mata continua existindo, em primitivas com a mesma gramática de silhueta —
 cone escuro é pinheiro, octaedro cinza é rocha. Nunca há um estado "meio migrado" em que a
 floresta simplesmente não aparece.
 
-**O chão segue.** É UM cubo de 900 unidades que acompanha o foco, travado em múltiplos do tamanho
-da textura, com o offset de UV compensando o deslocamento — senão o terreno desliza sob os pés, que
-é o artefato clássico de chão que persegue a câmera. Chão por chunk custaria centenas de objetos
-para desenhar uma superfície plana.
+**O chão é uma malha facetada low-poly**, verde chapado `#97B48C`, sem textura: o volume vem das
+**normais**, uma por triângulo. Seis vértices por faceta, nenhum compartilhado — vértice
+compartilhado receberia a normal média dos vizinhos, que é exatamente a superfície suave que
+low-poly não é.
+
+**Faceta não vem de amplitude, vem de FREQUÊNCIA comparável ao tamanho do triângulo.** O relevo tem
+três oitavas, e a curta tem o **período de uma faceta** (3,5 células), então os cantos de um
+triângulo caem em pontos vizinhos da grade do ruído e recebem valores independentes. Medido: só com
+as oitavas larga e média a inclinação média era **0,9°** — geometricamente correto e visualmente
+chapado; com a oitava de faceta vai a **5,7° (máx 17°)**. `BoardRenderer.Relief` é o único botão:
+0,6 dá 3,8°/11,7°, 1,2 dá 7,6°/22,5°.
+
+**A altura é função pura da posição no MUNDO** (`GroundShape`), não do pedaço de malha que a
+desenha. É o que resolve o chão que persegue a câmera: o tapete de 252 unidades snapa em múltiplos
+da faceta, os vértices caem sempre na mesma grade do mundo, e reconstruir redesenha exatamente a
+mesma superfície. O terreno fica parado enquanto a malha corre atrás.
+
+Nada de atenuação na borda do tapete, e isso é deliberado: seria a maneira óbvia de esconder a
+emenda com o horizonte, mas faria a altura de um mesmo ponto do mundo **mudar conforme o jogador
+anda** — e as entidades, que leem a altura direto, passariam a flutuar perto da borda. Malha e
+entidades têm de concordar sobre onde o chão está, sempre. A emenda fica a 126 unidades, além da
+névoa diurna.
+
+**O relevo entra por `GridToWorld.ToWorld`**, a única ponte entre o espaço da simulação e o do
+mundo. Por baixo dela ele alcança tudo que pisa no chão — herói, monstro, árvore, Esconderijo — de
+uma vez; a alternativa era somar a altura em quinze pontos de chamada e descobrir o décimo sexto
+quando algo aparecesse flutuando. `ToFlatWorld` existe para o que precisa de plano.
+
+**O centro fica chapado** (`OutskirtsRadius`, com rampa de 26 células). Prédio em terreno inclinado
+ou flutua ou afunda, e o tabuleiro é uma grade de peças de 1×1; o anel também fica plano porque é
+onde os pilares de Faixa marcam a ameaça. A vila é construída, o lado de fora é bruto — e a
+fronteira entre os dois vira leitura de graça.
+
+A simulação **não sabe** que existe relevo: ela é plana, herói anda em `Vec2`, alcance de ataque é
+medido no plano. Relevo é leitura, não regra.
 
 **Câmera.** Perspectiva com **FOV 35**, pitch 50°, yaw 45°, distância 18–25. FOV baixo é a peça
 central: perto o bastante de uma projeção paralela para que duas torres iguais pareçam iguais em
@@ -443,7 +628,8 @@ Jogável solo com placeholders: 5 noites, ciclo Dia/Noite de 5+5 min, **mundo pr
 Distritos, draft, Escombros, Túmulos, Urnas.
 
 Arte própria em campo: **Sentinela** e **Arqueiro** como heróis, os dois riggados e com ciclo de
-corrida (o Arqueiro veio em GLB e entra pelo conversor); **cinco árvores** compondo a mata. O nome que aparece no menu descreve o personagem
+corrida (o Arqueiro veio em GLB e entra pelo conversor); **cinco árvores, três pedras e três
+rochedos** compondo a mata e a pedreira. O nome que aparece no menu descreve o personagem
 que o jogador vê, não a classe interna — enquanto todos eram cápsula colorida os dois podiam ser a
 mesma palavra, mas "Arauto" em cima de um arqueiro faz o menu mentir. A constante do `DefaultContent`
 não muda junto: `DefId` vem do hash dela, e renomeá-la invalidaria replay.
@@ -452,12 +638,22 @@ não muda junto: `DefId` vem do hash dela, e renomeá-la invalidaria replay.
 
 | | noite alcançada de 5 | nível de cidade |
 |---|---:|---:|
-| 1 jogador | 1,8 | 4,8 |
-| 2 jogadores | 2,4 | 7,0 |
-| 4 jogadores | **4,6** | 10,4 |
-| 4 jogadores, sem explorar | 4,5 | 9,0 |
+| 1 jogador | 1,7 | 4,5 |
+| 2 jogadores | 2,3 | 6,6 |
+| 4 jogadores | **4,6** | 10,6 |
+| 4 jogadores, sem explorar | 4,3 | 8,7 |
 
-Explorar vale **+15% de nível de cidade** — o número existe para provar que o sistema de
+*(24 seeds. A tabela anterior, de 8 seeds, foi medida num gerador com o viés descrito abaixo.)*
+
+Explorar vale **+23% de nível de cidade** — e esse número subiu de 15% quando o acoplamento entre
+densidade e sorteio foi removido, não quando alguém mexeu numa recompensa. Os saques do Esconderijo
+ficavam **dentro** dos `&&` que testam densidade, então o curto-circuito do C# fazia chunks de mata
+fechada consumirem mais aleatoriedade antes do sorteio do achado: a chance de Esconderijo estava
+correlacionada com a floresta sem que ninguém tivesse pedido. O 15% era medido num gerador
+enviesado; o 23% é o valor real. Se ele parecer generoso, o botão é
+`WorldCacheChanceNear`/`Far` — mas mexa nele com a medição nova como referência, não com a antiga.
+
+O número existe para provar que o sistema de
 Esconderijos muda uma decisão em vez de decorar o mapa. Ele já esteve em 0% duas vezes (os
 Esconderijos nasciam onde já se colhia; depois nasciam fora do alcance de movimento do herói) e em
 excesso uma vez, quando o mundo infinito fez os batedores recolherem 299 num dia. Refaça a medição
@@ -482,6 +678,27 @@ Três decisões desse documento que restringem código daqui em diante:
 Assentos sem humano viram Autômatos, que colhem e depositam mas nunca constroem nem escolhem carta.
 
 Ver `Docs/GDD.md` para o design completo e o roadmap.
+
+### Dívidas conhecidas
+
+**O Kaiju esconde o herói, e é medível.** Com pitch 50° um corpo de altura H oculta 0,84·H células
+atrás de si. O Kaiju está em 4,0 (a ponta baixa do token de chefe) e tem `BodyRadius` 1,4, o que
+põe o limiar de reaparecimento em 3,25 células — acima do `AttackRadius` de **três** das quatro
+classes (Golem 2,7 · Guarda 2,9 · Lenhador 3,1). Ou seja: no clímax da noite 5, atacando no
+alcance máximo, o jogador perde o próprio herói de vista atrás do chefe. Num jogo cujo único verbo
+é ESTAR, é o defeito mais caro possível.
+
+Não dá para resolver mexendo na câmera: `Yaw` é fixo em 45° e não existe comando de rotação. As
+saídas são (a) fade/dither do que oclui o herói, que é como o gênero resolve, ou (b) baixar o
+Kaiju para 3,0, o que sai do token. A opção (a) preserva o token e é a certa; até ela existir, a
+dívida é real e conhecida.
+
+**Três texturas não importam.** `PedraMontanha_BaseColor.png`, `RochedoCume_BaseColor.png` e
+`RochedoFacetado_BaseColor.png` são **WebP renomeados** `.png`, que o Unity não decodifica (os
+`.meta` dos três não têm bloco `platformSettings`, contra 143 linhas nos que importaram). As três
+peças entrariam brancas em 100% de luminância — o pior valor possível para cenário. `CharacterSetup`
+passou a carimbar um cinza da faixa de ambiente quando **não há albedo**, o que é remendo, não
+conserto: some sozinho no dia em que os arquivos virarem PNG de verdade.
 
 ## Verificar sem abrir o Unity
 

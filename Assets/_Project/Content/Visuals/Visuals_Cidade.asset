@@ -15,7 +15,7 @@ MonoBehaviour:
   DisplayName: Cidade sitiada
   Notes: Polylised - Medieval Desert City + Fantasy Forest. Gerado por Destiny Together
     > Aplicar arte importada.
-  SetupVersion: 11
+  SetupVersion: 13
   Entries:
   - DefName: Balestra
     Prefab: {fileID: 1356718791037878, guid: d4bbfcf82f1bd6f43a1ef19c811777fa, type: 3}
@@ -23,16 +23,16 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 2.6
+    MaxHeightCells: 2
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: TorreDeGelo
     Prefab: {fileID: 1933501008555322, guid: 3d5764d3cca272942b5087884ae75b75, type: 3}
-    TargetCells: 1
+    TargetCells: 1.1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 2.6
+    MaxHeightCells: 2
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: BalistaDeImpacto
@@ -41,7 +41,7 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 2.2
+    MaxHeightCells: 2
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: PostoDeVigia
@@ -50,16 +50,16 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 3.2
+    MaxHeightCells: 3
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Braseiro
     Prefab: {fileID: 1235266061306044, guid: 4a24c2abcf3d91547bdeff629e1532c3, type: 3}
-    TargetCells: 0.8
+    TargetCells: 1
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.4
+    MaxHeightCells: 1.5
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Muralha
@@ -68,7 +68,7 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.2
+    MaxHeightCells: 1
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Serraria
@@ -77,16 +77,16 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.6
+    MaxHeightCells: 1
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Pedreira
     Prefab: {fileID: 1448931260341668, guid: 914008923a1f33345b91f7350da887df, type: 3}
-    TargetCells: 1
+    TargetCells: 1.05
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.6
+    MaxHeightCells: 1
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Oficina
@@ -95,7 +95,7 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.6
+    MaxHeightCells: 1.5
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Deposito
@@ -104,7 +104,7 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1
+    MaxHeightCells: 0.8
     KeepOriginalScale: 0
     AutoUpright: 0
   - DefName: Guarda
@@ -113,7 +113,7 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: 0, y: 0, z: 0}
-    MaxHeightCells: 1.7
+    MaxHeightCells: 1.8
     KeepOriginalScale: 0
     AutoUpright: 1
   - DefName: Arauto
@@ -122,50 +122,50 @@ MonoBehaviour:
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: 0, y: 0, z: 0}
-    MaxHeightCells: 1.7
+    MaxHeightCells: 1.8
     KeepOriginalScale: 0
     AutoUpright: 1
   Tree:
     DefName: Arvore
-    Prefab: {fileID: 1656880635380694, guid: 4215dcb581b5b634c914cd0cf1ccd81b, type: 3}
-    TargetCells: 1.6
+    Prefab: {fileID: 4601894808724078792, guid: 1ef63dc904b798d489601acb31a3f5a2, type: 3}
+    TargetCells: 1.8
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 3.2
+    MaxHeightCells: 3
     KeepOriginalScale: 0
     AutoUpright: 0
   Rock:
     DefName: Rocha
-    Prefab: {fileID: 1512402997361328, guid: a323c930711a463478f1cadd4a89ff53, type: 3}
-    TargetCells: 1.3
+    Prefab: {fileID: 7279113831838623212, guid: 6bd161d8e16b7874e82cc33854480905, type: 3}
+    TargetCells: 1.6
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 1.1
+    MaxHeightCells: 0.8
     KeepOriginalScale: 0
     AutoUpright: 0
   Chest:
     DefName: Bau
     Prefab: {fileID: 1097295525789290, guid: 07a4904133d4b4142b6e071d776d66e4, type: 3}
-    TargetCells: 0.9
+    TargetCells: 1.2
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 0.9
+    MaxHeightCells: 0.8
     KeepOriginalScale: 0
     AutoUpright: 0
   TownHall:
     DefName: Prefeitura
     Prefab: {fileID: 1044818417282170, guid: 9a0029d66f7229f4dacf38d09d5ddea3, type: 3}
-    TargetCells: 4.5
+    TargetCells: 5
     ScaleMultiplier: 1
     Offset: {x: 0, y: 0, z: 0}
     EulerAngles: {x: -90, y: 0, z: 0}
-    MaxHeightCells: 7
+    MaxHeightCells: 5.5
     KeepOriginalScale: 0
     AutoUpright: 0
-  GroundMaterial: {fileID: 2100000, guid: 40e69315dc8bd0b45be8bf7143248fba, type: 2}
+  GroundMaterial: {fileID: 0}
   TileMaterial: {fileID: 0}
   ScatterProps:
   - {fileID: 4601894808724078792, guid: 1ef63dc904b798d489601acb31a3f5a2, type: 3}
@@ -173,34 +173,31 @@ MonoBehaviour:
   - {fileID: 2821163156963537039, guid: 6c9a525bb41b0d947bce46549a99abed, type: 3}
   - {fileID: 1467186526028022966, guid: 17c4c6ceed02b0c43b8c6f71d767b414, type: 3}
   - {fileID: 7995672192106131045, guid: ed2af12ebe149414d98b888473340755, type: 3}
-  - {fileID: 1801292862687298, guid: ccdba26d869ffd548856ea7eca38ac97, type: 3}
-  - {fileID: 1361885322256504, guid: ca09ab545ccbe4346af61d072bc2b67f, type: 3}
-  - {fileID: 1280876935764306, guid: 7ffc5928338e9a1418cd3caa68441619, type: 3}
-  - {fileID: 1582960387707150, guid: 9e9d25172ea57e54cad899a510194ea8, type: 3}
-  - {fileID: 1939841420551160, guid: de205966855be504a95152ab56d0896e, type: 3}
-  - {fileID: 1230710984052900, guid: a923030e277c73c4880630365f3a67b0, type: 3}
-  - {fileID: 1841920225215856, guid: c22e62201f2b11245b2b8f3188b66655, type: 3}
-  - {fileID: 1360444800251178, guid: c4789a704ccd23f4d9aa4a8694b41fa0, type: 3}
-  - {fileID: 1141541113816982, guid: 29e966885f102e54d97ab5f78ed715c8, type: 3}
-  - {fileID: 1058886637327582, guid: 4cc4a170ba1e7ae48a9688fe23ddbe89, type: 3}
-  - {fileID: 1238566819580450, guid: 5db841ccc057fc54d896da56796529ba, type: 3}
-  - {fileID: 1876142201406200, guid: f6a029b9b005e3b48ba76000f8c2b62a, type: 3}
-  - {fileID: 1113708428238928, guid: 0f423507880a570418de6a595999407c, type: 3}
   QuarryProps:
-  - {fileID: 1512402997361328, guid: a323c930711a463478f1cadd4a89ff53, type: 3}
-  - {fileID: 1280221912402496, guid: 41a670177e1723444b5622302f81dd16, type: 3}
-  - {fileID: 1310941924343414, guid: b9f2941615c218b4282635a3390d783c, type: 3}
-  - {fileID: 1107357078673850, guid: b7980771a74d0644ab032498d1948ca2, type: 3}
+  - {fileID: 7279113831838623212, guid: 6bd161d8e16b7874e82cc33854480905, type: 3}
+  - {fileID: 317711349769443367, guid: 1f008e5504263a34687c06b151cb17e6, type: 3}
+  - {fileID: 1535231666362253094, guid: 732f5586d37d34b4d83514fd8a5861bd, type: 3}
+  RegionGroundTints:
+  - {r: 0.592, g: 0.706, b: 0.549, a: 1}
+  - {r: 0.69, g: 0.675, b: 0.639, a: 1}
+  - {r: 0.702, g: 0.682, b: 0.533, a: 1}
+  - {r: 0.561, g: 0.686, b: 0.584, a: 1}
+  CliffProps:
+  - {fileID: 4016438346539676076, guid: 4d2b724d89e387f429394e2277254eb5, type: 3}
+  - {fileID: 4514779589511231837, guid: 4752cb5648435434ebdbce0e7e4889e8, type: 3}
+  - {fileID: 6480603437547053778, guid: 1be2e0deadf64a84caf7776952779eb6, type: 3}
   PropRadiusChunks: 5
-  QuarryTargetCells: 2.6
-  QuarryMaxHeightCells: 4
+  QuarryTargetCells: 3
+  QuarryMaxHeightCells: 2
+  CliffTargetCells: 6.5
+  CliffMaxHeightCells: 6.5
   ScatterCount: 440
   ForestRadius: 13
   ForestDensityBias: 0.72
   ForestClearing: 4
-  ScatterTargetCells: 2.2
-  ScatterMaxHeightCells: 5
+  ScatterTargetCells: 2.4
+  ScatterMaxHeightCells: 3
   ScatterMinScale: 0.65
   ScatterMaxScale: 1.6
   ScatterEulerAngles: {x: -90, y: 0, z: 0}
-  GroundTint: {r: 0.4, g: 0.35, b: 0.21, a: 1}
+  GroundTint: {r: 0.69, g: 0.675, b: 0.639, a: 1}

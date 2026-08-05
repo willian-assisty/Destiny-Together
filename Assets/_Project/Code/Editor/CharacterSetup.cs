@@ -192,7 +192,19 @@ namespace DestinyTogether.EditorTools
             }
 
             // Cor base BRANCA: ela multiplica o albedo, e qualquer outra coisa tingiria a arte.
-            if (material.HasProperty(ShaderIds.BaseColor)) material.SetColor(ShaderIds.BaseColor, Color.white);
+            //
+            // SEM albedo, porem, branco não é neutro — é branco. Em URP um material sem _BaseMap
+            // e com _BaseColor branco renderiza a peça em 100% de luminância, que é o valor mais
+            // alto possível e o dobro do teto da faixa de ambiente. Hoje isso atinge três peças
+            // reais (PedraMontanha, RochedoCume, RochedoFacetado): o `_BaseColor.png` delas é um
+            // WebP renomeado, que o Unity não decodifica, então elas entram no mundo como blocos
+            // brancos — e um rochedo é justamente a maior peça da tela.
+            //
+            // O cinza abaixo está na faixa de ambiente e some sozinho no dia em que as texturas
+            // virarem PNG de verdade, porque aí `albedo` deixa de ser nulo.
+            if (material.HasProperty(ShaderIds.BaseColor))
+                material.SetColor(ShaderIds.BaseColor,
+                                  albedo != null ? Color.white : new Color(0.672f, 0.669f, 0.742f));
             if (material.HasProperty(ShaderIds.Metallic)) material.SetFloat(ShaderIds.Metallic, 0.1f);
             if (material.HasProperty(ShaderIds.Smoothness)) material.SetFloat(ShaderIds.Smoothness, 0.35f);
 

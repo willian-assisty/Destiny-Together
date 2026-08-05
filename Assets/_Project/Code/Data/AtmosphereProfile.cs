@@ -26,7 +26,18 @@ namespace DestinyTogether.Data
 
         [Header("Sol (noite)")]
         public Color SunColor = new Color(0.62f, 0.68f, 0.85f);
-        [Range(0f, 3f)] public float SunIntensity = 0.75f;
+
+        /// <summary>
+        /// Luar. 0,30 e nao 0,75, e o motivo e a ORDEM de leitura, nao o brilho.
+        ///
+        /// O chao subiu de 12,6% para 41,1% de albedo (faixa de ambiente do token). Mantida a luz
+        /// antiga, a noite passava a render um chao mais claro que o token de XP (28,4%) e que o
+        /// de horda (12%) — ou seja, o cenario ficava por cima do gameplay exatamente na fase em
+        /// que enxergar a horda e a unica coisa que importa. Baixar a direcional e o que devolve a
+        /// ordem: com albedo 3,3x maior e luz 2,5x menor o chao noturno fica onde estava, e as
+        /// pecas de gameplay, que nao mudaram de cor, voltam a se destacar dele.
+        /// </summary>
+        [Range(0f, 3f)] public float SunIntensity = 0.30f;
         /// <summary>
         /// X é IGNORADO — a elevação vem do arco em <c>DayNightCycle.Sun</c>. Y é o azimute do
         /// MEIO-DIA, do qual o nascer fica 90° para um lado e o poente 90° para o outro; Z é o
@@ -54,17 +65,34 @@ namespace DestinyTogether.Data
         public bool SunShadows = true;
         [Range(0f, 1f)] public float ShadowStrength = 0.75f;
 
+        /// <summary>
+        /// #343A52, 4,4% de luminancia linear. Subiu pouco de proposito (era 2,8%).
+        ///
+        /// A tentacao era subir muito, para "compensar" o chao mais claro. Medido, isso destroi a
+        /// noite: com ambiente a 14% o quadro inteiro vira um banho cinza-azulado em que o Kaiju
+        /// fica a tres niveis de 255 do chao em que pisa. O que a noite precisa nao e de brilho, e
+        /// de ESPALHAMENTO — e espalhamento vem de manter o ambiente baixo enquanto as pecas de
+        /// gameplay carregam a propria cor.
+        /// </summary>
         [Header("Luz ambiente (noite)")]
-        public Color AmbientColor = new Color(0.16f, 0.18f, 0.26f);
+        public Color AmbientColor = new Color(0.204f, 0.227f, 0.322f);
 
         [Header("Nevoa (noite)")]
         public bool FogEnabled = true;
-        public Color FogColor = new Color(0.09f, 0.10f, 0.14f);
+        // #1D2130 (1,6%): fica ABAIXO do chão noturno de propósito, para que a distância
+        // ESCUREÇA em vez de clarear. Névoa mais clara que o chão faz o horizonte brilhar, e é o
+        // avesso do que uma noite fechada precisa.
+        public Color FogColor = new Color(0.114f, 0.129f, 0.188f);
         public FogMode FogMode = FogMode.ExponentialSquared;
-        // 0.045 fecha o mundo a ~30 unidades: a horda surge do escuro em vez de estar sempre à
-        // vista. Os pilares de Faixa foram trazidos para dentro desse alcance justamente para
-        // continuarem legíveis — névoa que engole a telegrafia da ameaça é clima caro demais.
-        [Range(0f, 0.2f)] public float FogDensity = 0.045f;
+        // 0,022 e não 0,045 — o default estava velho, e é o asset que tinha o valor calibrado.
+        //
+        // A névoa do Unity mede da CÂMERA, não do herói, e a câmera fica a 18–25 unidades. Medido
+        // em 0,045: sobra 37% de visibilidade no PRÓPRIO herói e 8,7% no pilar de Faixa do lado
+        // oposto — ou seja, a telegrafia da ameaça some. Em 0,022 são 79% e 56%. O comentário
+        // logo abaixo da linha que posiciona os pilares diz literalmente que eles não podem sumir
+        // com névoa densa; 0,045 produzia exatamente isso. Se a noite precisar fechar mais, o teto
+        // é ~0,030 (48% no herói, 34% no pilar distante).
+        [Range(0f, 0.2f)] public float FogDensity = 0.022f;
         [Tooltip("Usado apenas no modo Linear.")]
         public float FogStart = 12f;
         public float FogEnd = 48f;
@@ -72,7 +100,7 @@ namespace DestinyTogether.Data
         [Header("Ceu e fundo")]
         public Material Skybox;
         [Tooltip("Cor de fundo quando nao ha skybox.")]
-        public Color BackgroundColor = new Color(0.05f, 0.055f, 0.075f);
+        public Color BackgroundColor = new Color(0.106f, 0.118f, 0.169f);
         [Tooltip("Usar o skybox como fundo da camera. Desligado = cor chapada, que reforca o clima fechado.")]
         public bool UseSkyboxAsBackground = false;
 
@@ -89,7 +117,10 @@ namespace DestinyTogether.Data
 
         [Header("Sol (dia)")]
         public Color DaySunColor = new Color(1.00f, 0.96f, 0.86f);
-        [Range(0f, 3f)] public float DaySunIntensity = 1.35f;
+        // 1,05 e nao 1,35: o chao triplicou de albedo (12,6% -> 41,1%) ao entrar na faixa de
+        // ambiente, e manter o sol antigo estouraria o meio-dia — chao no limite do branco engole
+        // a silhueta, que e a gramatica de leitura do jogo inteiro.
+        [Range(0f, 3f)] public float DaySunIntensity = 1.05f;
         [Range(0f, 1f)] public float DayShadowStrength = 0.55f;
 
         [Header("Luz ambiente (dia)")]

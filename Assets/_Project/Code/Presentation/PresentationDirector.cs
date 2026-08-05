@@ -35,6 +35,15 @@ namespace DestinyTogether.Presentation
 
         private bool _boardDirty = true;
 
+        /// <summary>
+        /// Teto de altura, em células, de uma torre fundida.
+        ///
+        /// 4,0 = a altura do Kaiju e 1,5 abaixo da Prefeitura (5,5). É o que preserva a regra "a
+        /// vila é a coisa mais alta do tabuleiro" contra um número de fusões que a simulação não
+        /// limita — <c>BuildSystem.existing.Tier++</c> não tem teto em lugar nenhum de DT.Sim.
+        /// </summary>
+        private const float MaxMergedHeight = 4.0f;
+
         public BoardRenderer Board => _board;
 
         /// <param name="profile">
@@ -47,7 +56,8 @@ namespace DestinyTogether.Presentation
             _root = root;
             _views = new ViewFactory(root, profile);
             _factory = _views.Placeholders;
-            _board = new BoardRenderer(_factory, root, sim.State.Grid, sim.Content, profile);
+            _board = new BoardRenderer(_factory, root, sim.State.Grid, sim.Content, profile,
+                                       sim.State.MatchSeed, sim.State.CityCenter);
             _effects = new EffectPool(root, _factory);
 
             SpawnInitialViews();
@@ -163,7 +173,13 @@ namespace DestinyTogether.Presentation
                     {
                         merged.PlayAction(ViewActionId.Build, 0.3f);
                         // Tier maior = mais alto. A silhueta conta o poder sem numero na tela.
-                        merged.ScaleVisual(new Vector3(1f, 1.3f, 1f));
+                        //
+                        // Com TETO, porque a fusao nao tem um: BuildSystem faz existing.Tier++ sem
+                        // limite, entao 1,3 por fusao e uma progressao geometrica. MaxMergedHeight
+                        // deixa qualquer torre fundida abaixo da Prefeitura (5,5) e no maximo
+                        // empatando com o Kaiju (4,0) — a vila continua a coisa mais alta do
+                        // tabuleiro por construcao, e nao por sorte no numero de fusoes.
+                        merged.ScaleVisual(new Vector3(1f, 1.3f, 1f), MaxMergedHeight);
                     }
                     break;
 
@@ -382,8 +398,11 @@ namespace DestinyTogether.Presentation
                       : n.Kind == HarvestNodeKind.Rocha ? PrimitiveShape.Sphere
                       : PrimitiveShape.Cube,
                 Color = PlaceholderVisuals.ResourceColor(n.Kind),
-                Scale = n.Kind == HarvestNodeKind.Arvore ? 0.5f : 0.7f,
-                Height = n.Kind == HarvestNodeKind.Arvore ? 2f : 0.7f
+                // Token de escala: arvore e "prop medio" (3,0); rocha e bau sao "prop pequeno"
+                // (0,8). A diferenca de altura entre os dois e o que diz, sem legenda, que um
+                // deles se colhe de pe e o outro se cata do chao.
+                Scale = n.Kind == HarvestNodeKind.Arvore ? 0.8f : 0.8f,
+                Height = n.Kind == HarvestNodeKind.Arvore ? 3f : 0.8f
             };
 
             var pos = GridToWorld.ToWorld(n.Position);

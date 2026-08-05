@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using DestinyTogether.Core;
 using DestinyTogether.Data;
 using DestinyTogether.Sim;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace DestinyTogether.Presentation
 {
@@ -32,21 +34,42 @@ namespace DestinyTogether.Presentation
 
         // Paleta escura. Os tiles precisam ser LEGÍVEIS sem competir com a arte: eles informam
         // (onde dá para construir, de quem é o Quadrante), não decoram.
-        private static readonly Color GroundColor = new Color(0.11f, 0.12f, 0.14f);
-        private static readonly Color EmptyTile = new Color(0.18f, 0.19f, 0.22f);
-        private static readonly Color TownHallTile = new Color(0.42f, 0.38f, 0.28f);
-        private static readonly Color RubbleTile = new Color(0.26f, 0.13f, 0.11f);
-        private static readonly Color GraveTile = new Color(0.09f, 0.09f, 0.12f);
+        //
+        // Eles ficam ABAIXO da faixa de ambiente (35-55%) de propósito, e isso não é uma exceção
+        // à regra de cor — é a regra. Tile não é `env.base`: ele diz onde dá para construir, onde
+        // um prédio caiu e onde um herói morreu, e o token manda todo elemento de GAMEPLAY viver
+        // fora da faixa. Com o chão subindo para ~41%, um tabuleiro dentro da faixa ficaria a 2
+        // níveis de 255 do campo em volta e a fronteira vila/mundo — "a vila é construída, o lado
+        // de fora é bruto" — deixaria de existir. Aqui ela vale ~13× em luminância.
+        //
+        // Entre os estados a razão é sempre >= 2×, senão Escombro e Túmulo, que são cicatrizes
+        // PERMANENTES, virariam o mesmo quadrado cinza com matiz diferente.
+        private static readonly Color EmptyTile = new Color(0.306f, 0.322f, 0.376f);
+        private static readonly Color TownHallTile = new Color(0.486f, 0.451f, 0.333f);
+        private static readonly Color RubbleTile = new Color(0.361f, 0.227f, 0.200f);
+        private static readonly Color GraveTile = new Color(0.173f, 0.173f, 0.227f);
+
+        /// <summary>
+        /// Tile sob um prédio. Constante explícita em vez de <c>EmptyTile * 0,7</c>: multiplicar em
+        /// sRGB não é mensurável no sítio, e a regra de luminância precisa ser conferível lendo.
+        /// </summary>
+        private static readonly Color BuildingTile = new Color(0.188f, 0.204f, 0.259f);
 
         private readonly VisualsProfile _profile;
 
+        private readonly int _seed;
+        private readonly Vec2 _cityCenter;
+
         public BoardRenderer(PlaceholderFactory factory, Transform root, BoardGrid grid,
-                             IContentDatabase content, VisualsProfile profile = null)
+                             IContentDatabase content, VisualsProfile profile = null,
+                             int seed = 0, Vec2 cityCenter = default)
         {
             _factory = factory;
             _root = root;
             _grid = grid;
             _profile = profile;
+            _seed = seed;
+            _cityCenter = cityCenter;
 
             _tileRenderers = new Renderer[grid.Size * grid.Size];
             _lastState = new CellState[grid.Size * grid.Size];
@@ -59,81 +82,244 @@ namespace DestinyTogether.Presentation
         }
 
         /// <summary>
-        /// Lado do chão, em unidades. Grande o bastante para nunca aparecer borda dentro do
-        /// alcance de visão, e barato porque é UM cubo — o chão não é streamado, ele ACOMPANHA.
+        /// Lado do horizonte, em unidades. É a laje lisa que preenche o fundo além do relevo —
+        /// ela vive dentro da névoa e não precisa de detalhe nenhum.
         /// </summary>
-        private const float GroundSize = 900f;
+        private const float HorizonSize = 900f;
 
-        /// <summary>Uma repetição da textura a cada 4 unidades. Também é o passo do snap.</summary>
-        private const float GroundTextureUnits = 4f;
+        /// <summary>
+        /// Lado de uma faceta. Vem de <see cref="GroundShape"/> porque a oitava curta do relevo tem
+        /// exatamente este período — é o casamento entre os dois que produz o facetado.
+        /// </summary>
+        private const float FacetSize = GroundShape.FacetSize;
 
-        private Transform _ground;
-        private Renderer _groundRenderer;
+        /// <summary>Facetas por lado do tapete. 72 × 3,5 = 252 unidades — a borda cai fora da névoa diurna.</summary>
+        private const int FacetsPerSide = 72;
+
+        /// <summary>
+        /// Altura máxima do relevo, em unidades.
+        ///
+        /// Medido: 0,9 dá inclinação média de 5,7° e máxima de 17°, com o terreno variando ±0,77 —
+        /// meia altura de herói. É onde a faceta se lê sem que o chão vire duna: mais que isso e o
+        /// herói sobe e desce de um jeito que compete com a leitura de ONDE ele está, que é a única
+        /// coisa que o jogador precisa ler o tempo todo.
+        ///
+        /// É o único botão do relevo. 0,6 dá 3,8°/11,7° (mais discreto); 1,2 dá 7,6°/22,5°.
+        /// </summary>
+        public const float Relief = 0.9f;
+
+        /// <summary>
+        /// Verde dessaturado #97B48C — a cor de tudo que é chão, e o fallback de RegionGroundTints.
+        ///
+        /// Era #4F6B45, que media 12,6% de luminância linear. O token de ambiente pede a faixa de
+        /// 35–55%, e a razão é que todo elemento de gameplay vive FORA dela: com o chão a 12,6% os
+        /// tokens escuros (horda a 12%, elite 22%, chefe 25%, XP 28%) caíam no mesmo valor do chão
+        /// em que pisam. A 41,1% eles voltam a ficar abaixo do fundo, que é o que a regra compra.
+        ///
+        /// A matiz não mudou (104°): o verde continua verde, mas sobe 3,3× em luminância e cai de
+        /// 35% para 22% de saturação — a faixa pede dessaturado, e croma alto no chão disputaria
+        /// com a cor de gameplay, que é a única coisa que tem licença para ser saturada.
+        /// </summary>
+        private static readonly Color GrassColor = new Color(0.592f, 0.706f, 0.549f);
+
+        /// <summary>
+        /// Quanto a malha do chão afunda em relação à altura que as entidades usam.
+        ///
+        /// Os tiles do tabuleiro têm 0,06 de espessura centrados em zero, e o realce de célula fica
+        /// em 0,06: com o chão exatamente em zero eles disputariam profundidade com ele. Afundar
+        /// 4 cm põe tudo isso claramente por cima, e 4 cm é invisível debaixo de um herói de 1,8.
+        /// </summary>
+        private const float GroundDrop = 0.04f;
+
+        /// <summary>
+        /// Topo da laje do horizonte. Abaixo do ponto mais fundo que o relevo alcança, senão ela
+        /// atravessaria o tapete por baixo e apareceria como um plano flutuando dentro dos vales.
+        /// </summary>
+        private const float HorizonTop = -0.95f;
+
+        private Transform _horizon;
+        /// <summary>Quantas regiões existem. Uma submalha e um material por região.</summary>
+        private const int RegionCount = 4;
+
+        private Mesh _groundMesh;
+        private Vector3[] _groundVertices;
+        private Vector3[] _groundNormals;
+        private List<int>[] _regionIndices;
+        private Material[] _regionMaterials;
+        private Vector2 _groundOrigin = new Vector2(float.MaxValue, float.MaxValue);
 
         private void BuildGround(IContentDatabase content)
         {
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ground.name = "Ground";
-            Object.Destroy(ground.GetComponent<Collider>());
-            ground.transform.SetParent(_root, false);
-            ground.transform.localScale = new Vector3(GroundSize, 0.2f, GroundSize);
-            ground.transform.position = GridToWorld.ToWorld(_grid.Center, -0.15f);
+            // Um material por região, na ordem de RegionKind.
+            _regionMaterials = new Material[RegionCount];
+            for (int i = 0; i < RegionCount; i++)
+                _regionMaterials[i] = _factory.GetMaterial(RegionTint(i));
 
-            _ground = ground.transform;
-            _groundRenderer = ground.GetComponent<Renderer>();
+            // A laje do horizonte usa a cor da Mata: ela vive dentro da névoa, e escolher a cor da
+            // região sob os pés faria o horizonte inteiro piscar ao cruzar uma fronteira.
+            var horizon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            horizon.name = "Horizonte";
+            Object.Destroy(horizon.GetComponent<Collider>());
+            horizon.transform.SetParent(_root, false);
+            horizon.transform.localScale = new Vector3(HorizonSize, 0.2f, HorizonSize);
+            horizon.transform.position = GridToWorld.ToFlatWorld(_grid.Center, HorizonTop - 0.1f);
+            horizon.GetComponent<Renderer>().sharedMaterial = _regionMaterials[0];
+            _horizon = horizon.transform;
 
-            if (_profile != null && _profile.GroundMaterial != null)
-                _groundRenderer.sharedMaterial = _profile.GroundMaterial;
-            else
-                _groundRenderer.sharedMaterial = _factory.GetMaterial(GroundColor);
+            // O tapete facetado. Vive em coordenadas de MUNDO com o transform na origem: assim a
+            // malha é a própria verdade sobre onde o relevo está, sem uma segunda conta de offset
+            // que possa discordar de GroundShape.
+            var carpet = new GameObject("Chao");
+            carpet.transform.SetParent(_root, false);
 
-            ApplyGroundUv(_ground.position);
+            _groundMesh = new Mesh { name = "ChaoFacetado", indexFormat = IndexFormat.UInt32 };
+            _groundMesh.MarkDynamic();
+            _groundMesh.subMeshCount = RegionCount;
+
+            carpet.AddComponent<MeshFilter>().sharedMesh = _groundMesh;
+            var renderer = carpet.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = _regionMaterials;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;   // chão não projeta sobre si mesmo
+
+            BuildFacetTopology();
+            TickGround(_grid.Center);
+        }
+
+        private Color RegionTint(int index)
+        {
+            var tints = _profile != null ? _profile.RegionGroundTints : null;
+            if (tints != null && index < tints.Length && tints[index].a > 0.01f) return tints[index];
+            return index == 0 ? GrassColor : GrassColor * 0.9f;
         }
 
         /// <summary>
-        /// Faz o chão seguir quem está olhando.
+        /// Monta índices e UVs uma vez só. Só as POSIÇÕES mudam quando o chão acompanha o foco.
         ///
-        /// O mundo não acaba, mas o chão é um cubo só. A alternativa — chão por chunk — custaria
-        /// centenas de objetos para desenhar uma superfície plana. Seguir custa uma atribuição de
-        /// transform por frame.
+        /// Seis vértices por faceta, sem nenhum compartilhado: é o que dá a cada triângulo a
+        /// própria normal. Vértice compartilhado produziria a normal média dos vizinhos — que é
+        /// exatamente a superfície suave que a referência não é.
+        /// </summary>
+        private void BuildFacetTopology()
+        {
+            int quads = FacetsPerSide * FacetsPerSide;
+            _groundVertices = new Vector3[quads * 6];
+            _groundNormals = new Vector3[quads * 6];
+
+            _regionIndices = new List<int>[RegionCount];
+            for (int i = 0; i < RegionCount; i++) _regionIndices[i] = new List<int>(quads * 6 / 2);
+
+            _groundMesh.Clear();
+            _groundMesh.subMeshCount = RegionCount;
+            _groundMesh.vertices = _groundVertices;
+        }
+
+        /// <summary>
+        /// Faz o chão acompanhar quem está olhando.
         ///
-        /// A posição é travada em múltiplos do tamanho da textura e o offset de UV compensa o
-        /// deslocamento, então o terreno fica parado no mundo em vez de deslizar sob os pés — que
-        /// é o artefato clássico de chão que persegue a câmera.
+        /// O mundo não acaba, mas o tapete tem 224 unidades. A posição é travada em múltiplos do
+        /// tamanho da faceta, então os vértices caem SEMPRE na mesma grade do mundo — e como a
+        /// altura vem de <see cref="GroundShape"/>, que é função da posição no mundo, reconstruir
+        /// o tapete redesenha exatamente a mesma superfície. O terreno fica parado enquanto a
+        /// malha corre atrás da câmera.
         /// </summary>
         public void TickGround(Vec2 focus)
         {
-            if (_ground == null) return;
+            if (_groundMesh == null) return;
 
-            float step = GroundTextureUnits;
-            float x = Mathf.Round(focus.X / step) * step;
-            float z = Mathf.Round(focus.Y / step) * step;
+            float half = FacetsPerSide * FacetSize * 0.5f;
+            float x0 = Mathf.Round(focus.X / FacetSize) * FacetSize - half;
+            float z0 = Mathf.Round(focus.Y / FacetSize) * FacetSize - half;
 
-            var target = GridToWorld.ToWorld(new Vec2(x, z), -0.15f);
-            if ((target - _ground.position).sqrMagnitude < 0.0001f) return;
+            if (_horizon != null)
+                _horizon.position = GridToWorld.ToFlatWorld(
+                    new Vec2(Mathf.Round(focus.X / FacetSize) * FacetSize,
+                             Mathf.Round(focus.Y / FacetSize) * FacetSize), HorizonTop - 0.1f);
 
-            _ground.position = target;
-            ApplyGroundUv(target);
+            if (Mathf.Approximately(x0, _groundOrigin.x) && Mathf.Approximately(z0, _groundOrigin.y)) return;
+            _groundOrigin = new Vector2(x0, z0);
+
+            RebuildFacets(x0, z0);
         }
 
-        private void ApplyGroundUv(Vector3 worldPosition)
+        /// <summary>
+        /// Reescreve posições e normais do tapete.
+        ///
+        /// A altura de um vértice vem SÓ de <see cref="GroundShape"/>, sem nenhuma correção que
+        /// dependa de onde o tapete está. Isso não é preciosismo: uma atenuação de borda — que
+        /// seria a maneira óbvia de esconder a emenda com o horizonte — faria a altura de um mesmo
+        /// ponto do mundo mudar conforme o jogador anda, e as entidades (que leem a altura direto,
+        /// sem atenuação) passariam a flutuar perto da borda. Malha e entidades têm de concordar
+        /// sobre onde o chão está, sempre.
+        ///
+        /// A emenda com a laje do horizonte fica então a 126 unidades do foco — além da névoa
+        /// diurna — e o degrau máximo lá é de 0,6 unidade visto quase de perfil.
+        /// </summary>
+        private void RebuildFacets(float x0, float z0)
         {
-            if (_groundRenderer == null) return;
+            var ground = GridToWorld.Ground;
+            for (int i = 0; i < RegionCount; i++) _regionIndices[i].Clear();
 
-            // Escurece e repete a textura por property block, sem editar o material do pack:
-            // esticada uma única vez pelo chão inteiro ela vira uma mancha lisa cor de areia, que
-            // foi parte do "não vejo nada além de uma pedra enorme".
-            float tiling = GroundSize / GroundTextureUnits;
-            float offsetX = worldPosition.x / GroundTextureUnits;
-            float offsetY = worldPosition.z / GroundTextureUnits;
+            int v = 0;
 
-            _groundRenderer.GetPropertyBlock(_block);
-            if (_profile != null && _profile.GroundMaterial != null)
+            for (int gz = 0; gz < FacetsPerSide; gz++)
             {
-                _block.SetColor(ShaderIds.BaseColor, _profile.GroundTint);
-                _block.SetVector(ShaderIds.BaseMapST, new Vector4(tiling, tiling, offsetX, offsetY));
+                float za = z0 + gz * FacetSize;
+                float zb = za + FacetSize;
+
+                for (int gx = 0; gx < FacetsPerSide; gx++)
+                {
+                    float xa = x0 + gx * FacetSize;
+                    float xb = xa + FacetSize;
+
+                    var p00 = new Vector3(xa, ground.HeightAt(new Vec2(xa, za)) - GroundDrop, za);
+                    var p10 = new Vector3(xb, ground.HeightAt(new Vec2(xb, za)) - GroundDrop, za);
+                    var p01 = new Vector3(xa, ground.HeightAt(new Vec2(xa, zb)) - GroundDrop, zb);
+                    var p11 = new Vector3(xb, ground.HeightAt(new Vec2(xb, zb)) - GroundDrop, zb);
+
+                    // A região é resolvida por FACETA, e é isso que dá a fronteira a leitura certa:
+                    // ela corre pelas arestas dos triângulos, em degraus, em vez de ser um degradê.
+                    // Chão low-poly com transição borrada briga com a própria gramática.
+                    var region = WorldLattice.RegionAt(_seed, new Vec2(xa + FacetSize * 0.5f,
+                                                                      za + FacetSize * 0.5f),
+                                                       _cityCenter);
+                    var bucket = _regionIndices[(int)region];
+
+                    // A diagonal alterna em xadrez. Com a diagonal sempre no mesmo sentido o chão
+                    // ganha um listrado regular que denuncia a grade na hora.
+                    if (((gx + gz) & 1) == 0)
+                    {
+                        v = Facet(v, p00, p01, p11, bucket);
+                        v = Facet(v, p00, p11, p10, bucket);
+                    }
+                    else
+                    {
+                        v = Facet(v, p01, p11, p10, bucket);
+                        v = Facet(v, p01, p10, p00, bucket);
+                    }
+                }
             }
-            _groundRenderer.SetPropertyBlock(_block);
+
+            _groundMesh.vertices = _groundVertices;
+            _groundMesh.normals = _groundNormals;
+            for (int i = 0; i < RegionCount; i++)
+                _groundMesh.SetTriangles(_regionIndices[i], i, calculateBounds: false);
+
+            // Bounds à mão: RecalculateNormals e RecalculateBounds varreriam 31 mil vértices duas
+            // vezes por segundo, e as duas respostas já são conhecidas aqui.
+            float side = FacetsPerSide * FacetSize;
+            _groundMesh.bounds = new Bounds(new Vector3(x0 + side * 0.5f, 0f, z0 + side * 0.5f),
+                                            new Vector3(side, Relief * 4f, side));
+        }
+
+        /// <summary>Um triângulo com a MESMA normal nos três vértices — é isto que faceta.</summary>
+        private int Facet(int v, Vector3 a, Vector3 b, Vector3 c, List<int> bucket)
+        {
+            var normal = Vector3.Cross(b - a, c - a).normalized;
+
+            bucket.Add(v); _groundVertices[v] = a; _groundNormals[v++] = normal;
+            bucket.Add(v); _groundVertices[v] = b; _groundNormals[v++] = normal;
+            bucket.Add(v); _groundVertices[v] = c; _groundNormals[v++] = normal;
+            return v;
         }
 
         private void BuildTiles()
@@ -222,7 +408,7 @@ namespace DestinyTogether.Presentation
                 case CellState.Prefeitura: return TownHallTile;
                 case CellState.Escombro: return RubbleTile;
                 case CellState.Tumulo: return GraveTile;
-                case CellState.Predio: return EmptyTile * 0.7f;
+                case CellState.Predio: return BuildingTile;
                 default:
                     // Tile vazio recebe um tom do Quadrante: soberania visivel sem UI nenhuma.
                     var q = _grid.QuadrantOf(cell);
@@ -254,7 +440,14 @@ namespace DestinyTogether.Presentation
                 var pillar = _lanePillars[i];
                 if (pillar == null) continue;
 
-                float height = f.IncomingCount <= 0 ? 0.4f : Mathf.Clamp(0.8f + f.IncomingCount * 0.18f, 0.8f, 6f);
+                // Teto 4,0 e nao 6,0: com pitch 50° um corpo de altura H esconde 0,84·H celulas de
+                // chao ATRAS de si, e o que esta atras do pilar e exatamente o corredor por onde a
+                // horda daquela Faixa entra. A 6,0 a telegrafia passava a ocluir a ameaca que
+                // telegrafa, e ocupava 57% da altura da tela no zoom minimo. A 4,0 esconde 3,4
+                // celulas e ocupa 27%, continuando acima de todo comum (1,6) e de todo elite (2,4).
+                //
+                // Se o teto saturar cedo demais, alargue X/Z em vez de subir Y: largura nao oclui.
+                float height = f.IncomingCount <= 0 ? 1.0f : Mathf.Clamp(2.0f + f.IncomingCount * 0.12f, 2.0f, 4f);
                 pillar.localScale = new Vector3(1.2f, height, 1.2f);
                 pillar.position = new Vector3(pillar.position.x, height * 0.5f, pillar.position.z);
 
@@ -270,7 +463,11 @@ namespace DestinyTogether.Presentation
         {
             var pillar = _lanePillars[(int)lane];
             if (pillar == null) return;
-            pillar.localScale = new Vector3(2.6f, pillar.localScale.y * 1.15f, 2.6f);
+            // O 1,15 e CUMULATIVO e nada o desfaz: TickPillars devolve X e Z ao repouso, nunca Y,
+            // e durante a Noite o Prognostico nao e reavaliado (Bootstrap so o refaz na virada de
+            // fase e no Dia). Sem o teto, cada Buzina da noite multiplicava a altura de novo e o
+            // pilar crescia sem parar. O teto e o mesmo da altura de Prognostico.
+            pillar.localScale = new Vector3(2.6f, Mathf.Min(pillar.localScale.y * 1.15f, 4f), 2.6f);
         }
 
         public void TickPillars(float dt)
